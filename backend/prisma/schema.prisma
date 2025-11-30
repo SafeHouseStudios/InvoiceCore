@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model client {
+  id           Int       @id @default(autoincrement())
+  company_name String
+  tax_id       String?
+  state_code   Int?
+  country      String    @default("India")
+  email        String?
+  phone        String?
+  addresses    Json?
+  created_at   DateTime  @default(now())
+  invoice      invoice[]
+}
+
+model invoice {
+  id             Int       @id @default(autoincrement())
+  invoice_number String    @unique(map: "Invoice_invoice_number_key")
+  client_id      Int
+  status         String    @default("DRAFT")
+  issue_date     DateTime
+  due_date       DateTime?
+  currency       String    @default("INR")
+  line_items     Json
+  tax_summary    Json
+  subtotal       Decimal   @db.Decimal(15, 2)
+  grand_total    Decimal   @db.Decimal(15, 2)
+  is_manual      Boolean   @default(false)
+  notes          String?   @db.Text
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @default(now())
+  client         client    @relation(fields: [client_id], references: [id], map: "Invoice_client_id_fkey")
+
+  @@index([client_id], map: "Invoice_client_id_idx")
+}
+
+model invoicesequence {
+  id          Int    @id @default(autoincrement())
+  fiscal_year String @unique(map: "InvoiceSequence_fiscal_year_key")
+  last_count  Int    @default(0)
+}
+
+model systemsetting {
+  key        String  @id @db.VarChar(50)
+  value      String? @db.Text
+  json_value Json?
+  is_locked  Boolean @default(false)
+}
+
+model user {
+  id                 Int      @id @default(autoincrement())
+  email              String   @unique(map: "User_email_key")
+  password_hash      String
+  two_factor_secret  String?
+  two_factor_enabled Boolean  @default(false)
+  backup_codes       Json?
+  role               String   @default("ADMIN")
+  created_at         DateTime @default(now())
+}
