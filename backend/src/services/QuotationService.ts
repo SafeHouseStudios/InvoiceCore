@@ -5,25 +5,36 @@ const prisma = new PrismaClient();
 
 interface CreateQuotationDTO {
   clientId: number;
-  issueDate: string; // ISO Date string
+  issueDate: string;
   expiryDate?: string;
-  items: any[]; // The BOQ / Services Offered
+  items: any[];
   subtotal: number;
   grandTotal: number;
   remarks?: string;
   contractTerms?: string;
   currency?: string;
+  bankAccountId?: number; // Added linkage
 }
 
 export class QuotationService {
   
-  // Helper: Get Fiscal Year string (e.g., "24-25")
+  // --- NEW: List All ---
+  static async getAllQuotations() {
+    // @ts-ignore
+    return await prisma.quotation.findMany({
+      include: {
+        // @ts-ignore
+        client: true 
+      },
+      orderBy: { created_at: 'desc' }
+    });
+  }
+
+  // --- Helper: Get Fiscal Year ---
   private static getFiscalYear(date: Date): string {
     const month = date.getMonth() + 1;
     const year = date.getFullYear();
     const shortYear = year % 100;
-
-    // In India, FY starts April 1st
     if (month >= 4) {
       return `${shortYear}-${shortYear + 1}`;
     } else {
@@ -31,44 +42,28 @@ export class QuotationService {
     }
   }
 
-  // Core: Generate Number & Save Quotation
+  // --- Create ---
   static async createQuotation(data: CreateQuotationDTO) {
-    
     return await prisma.$transaction(async (tx) => {
-      // 1. Determine Fiscal Year
       const dateObj = new Date(data.issueDate);
       const fy = this.getFiscalYear(dateObj);
 
-      // 2. Get Next Sequence Number for QUOTATIONS
-      // We check the "QuotationSequence" table, distinct from Invoices
       // @ts-ignore
-      let sequence = await tx.quotationSequence.findUnique({
-        where: { fiscal_year: fy }
-      });
+      let sequence = await tx.quotationSequence.findUnique({ where: { fiscal_year: fy } });
 
       if (!sequence) {
         // @ts-ignore
-        sequence = await tx.quotationSequence.create({
-          data: { fiscal_year: fy, last_count: 0 }
-        });
+        sequence = await tx.quotationSequence.create({ data: { fiscal_year: fy, last_count: 0 } });
       }
 
       const nextCount = sequence.last_count + 1;
-      
-      // 3. Format the Quotation Number (e.g., "QTN/24-25/001")
-      const paddedCount = nextCount.toString().padStart(3, '0'); 
-      const quotationNumber = `QTN/${fy}/${paddedCount}`;
+      const quotationNumber = `QTN/${fy}/${nextCount.toString().padStart(3, '0')}`;
 
-      // 4. Update the Sequence
       // @ts-ignore
-      await tx.quotationSequence.update({
-        where: { id: sequence.id },
-        data: { last_count: nextCount }
-      });
+      await tx.quotationSequence.update({ where: { id: sequence.id }, data: { last_count: nextCount } });
 
-      // 5. Create the Quotation Record
       // @ts-ignore
-      const newQuotation = await tx.quotation.create({
+      return await tx.quotation.create({
         data: {
           quotation_number: quotationNumber,
           client_id: data.clientId,
@@ -80,11 +75,10 @@ export class QuotationService {
           remarks: data.remarks,
           subtotal: data.subtotal,
           grand_total: data.grandTotal,
-          currency: data.currency || 'INR'
+          currency: data.currency || 'INR',
+          bank_account_id: data.bankAccountId
         }
       });
-
-      return newQuotation;
     });
   }
 }

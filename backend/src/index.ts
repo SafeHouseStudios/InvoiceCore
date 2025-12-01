@@ -13,6 +13,7 @@ import twoFactorRoutes from './routes/2faRoutes';
 import bankRoutes from './routes/bankRoutes';
 import userRoutes from './routes/userRoutes';
 import expenseRoutes from './routes/expenseRoutes';
+import quotationRoutes from './routes/quotationRoutes';
 
 // 1. Initialize Configuration
 dotenv.config();
@@ -45,6 +46,7 @@ app.use('/api/2fa', twoFactorRoutes);
 app.use('/api/banks', bankRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/expenses', expenseRoutes);
+app.use('/api/quotations', quotationRoutes);
 
 // 4. Start Server
 app.listen(PORT, () => {

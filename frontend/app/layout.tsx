@@ -46,6 +46,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               Expenses
             </Link>
 
+            <Link href="/quotations" className="flex items-center px-4 py-3 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800 rounded-md transition-colors">
+              <FileText className="h-5 w-5 mr-3" /> {/* Reusing FileText or import specific icon */}
+              Quotations
+            </Link>
+
           </nav>
 
           <div className="mt-auto">
