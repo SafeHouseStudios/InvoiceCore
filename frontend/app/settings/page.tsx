@@ -26,6 +26,38 @@ export default function SettingsPage() {
     company_name: '', address: '', state_code: '', gstin: '', phone: '', email: '', currency: 'INR',
   });
 
+  // --- Templates State ---
+  const [templates, setTemplates] = useState({
+    invoice: { subject: '', body: '' },
+    quotation: { subject: '', body: '' }
+  });
+
+  // --- Load Templates ---
+  useEffect(() => {
+    // ... existing loads ...
+    loadTemplates();
+  }, []);
+
+  const loadTemplates = async () => {
+    try {
+        const res = await api.get('/mail/templates');
+        setTemplates(res.data);
+    } catch (err) { console.error(err); }
+  };
+
+  // --- Save Templates ---
+  const handleSaveTemplates = async () => {
+    setLoading(true);
+    try {
+        await api.post('/mail/templates', templates);
+        alert("Templates saved successfully!");
+    } catch (e) {
+        alert("Failed to save templates");
+    } finally {
+        setLoading(false);
+    }
+  };
+
   // --- SMTP State ---
   const [smtp, setSmtp] = useState({
     host: '', port: '', user: '', password: '', fromEmail: ''
@@ -355,33 +387,95 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* --- TAB 3: EMAIL CONFIG (NEW) --- */}
+{/* --- TAB 3: EMAIL CONFIG & TEMPLATES --- */}
         <TabsContent value="email">
-          <Card>
-            <CardHeader>
-              <CardTitle>SMTP Configuration</CardTitle>
-              <CardDescription>Configure your email provider to send invoices directly.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>SMTP Host</Label><Input name="host" placeholder="smtp.gmail.com" value={smtp.host} onChange={handleSmtpChange} /></div>
-                <div className="space-y-2"><Label>SMTP Port</Label><Input name="port" placeholder="587 or 465" value={smtp.port} onChange={handleSmtpChange} /></div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>User / Email</Label><Input name="user" value={smtp.user} onChange={handleSmtpChange} /></div>
-                <div className="space-y-2"><Label>Password / App Key</Label><Input type="password" name="password" placeholder="••••••••" value={smtp.password} onChange={handleSmtpChange} /></div>
-              </div>
-              <div className="space-y-2"><Label>Sender Email (From)</Label><Input name="fromEmail" placeholder="accounts@mycompany.com" value={smtp.fromEmail} onChange={handleSmtpChange} /></div>
-              
-              <div className="pt-4 border-t flex justify-between">
-                 <Button variant="outline" onClick={handleSendTestEmail} disabled={isTestEmailSending}>
-                    {isTestEmailSending ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Mail className="w-4 h-4 mr-2"/>}
-                    Send Test Email
-                 </Button>
-                 <Button onClick={handleSaveSmtp} disabled={loading}>{loading ? "Saving..." : "Save Configuration"}</Button>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 gap-6">
+            
+            {/* SMTP Config Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>SMTP Configuration</CardTitle>
+                <CardDescription>Configure your email provider.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2"><Label>SMTP Host</Label><Input name="host" placeholder="smtp.gmail.com" value={smtp.host} onChange={handleSmtpChange} /></div>
+                  <div className="space-y-2"><Label>SMTP Port</Label><Input name="port" placeholder="587" value={smtp.port} onChange={handleSmtpChange} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2"><Label>User / Email</Label><Input name="user" value={smtp.user} onChange={handleSmtpChange} /></div>
+                  <div className="space-y-2"><Label>Password</Label><Input type="password" name="password" placeholder="••••••••" value={smtp.password} onChange={handleSmtpChange} /></div>
+                </div>
+                <div className="space-y-2"><Label>Sender Email (From)</Label><Input name="fromEmail" value={smtp.fromEmail} onChange={handleSmtpChange} /></div>
+                
+                <div className="pt-4 border-t flex justify-between">
+                   <Button variant="outline" onClick={handleSendTestEmail} disabled={isTestEmailSending}>
+                      {isTestEmailSending ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Mail className="w-4 h-4 mr-2"/>}
+                      Send Test Email
+                   </Button>
+                   <Button onClick={handleSaveSmtp} disabled={loading}>{loading ? "Saving..." : "Save Config"}</Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Email Templates Card (NEW) */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Email Templates</CardTitle>
+                <CardDescription>Customize the subject and body of your emails. Use placeholders like {"{{client}}"}, {"{{number}}"}, {"{{amount}}"}, {"{{date}}"}.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                
+                {/* Invoice Template */}
+                <div className="space-y-3 border p-4 rounded-md bg-slate-50/50">
+                    <h3 className="font-semibold text-sm">Invoice Email</h3>
+                    <div className="space-y-2">
+                        <Label>Subject</Label>
+                        <Input 
+                            value={templates.invoice.subject} 
+                            onChange={(e) => setTemplates({...templates, invoice: {...templates.invoice, subject: e.target.value}})} 
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Body</Label>
+                        <Textarea 
+                            className="h-32 font-mono text-xs"
+                            value={templates.invoice.body} 
+                            onChange={(e) => setTemplates({...templates, invoice: {...templates.invoice, body: e.target.value}})} 
+                        />
+                    </div>
+                </div>
+
+                {/* Quotation Template */}
+                <div className="space-y-3 border p-4 rounded-md bg-slate-50/50">
+                    <h3 className="font-semibold text-sm">Quotation Email</h3>
+                    <div className="space-y-2">
+                        <Label>Subject</Label>
+                        <Input 
+                            value={templates.quotation.subject} 
+                            onChange={(e) => setTemplates({...templates, quotation: {...templates.quotation, subject: e.target.value}})} 
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Body</Label>
+                        <Textarea 
+                            className="h-32 font-mono text-xs"
+                            value={templates.quotation.body} 
+                            onChange={(e) => setTemplates({...templates, quotation: {...templates.quotation, body: e.target.value}})} 
+                        />
+                    </div>
+                </div>
+
+                <div className="flex justify-end">
+                    <Button onClick={handleSaveTemplates} disabled={loading}>
+                        {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Save className="w-4 h-4 mr-2"/>}
+                        Save Templates
+                    </Button>
+                </div>
+
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* --- TAB 4: TEAM --- */}
