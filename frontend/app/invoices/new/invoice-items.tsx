@@ -1,15 +1,16 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2 } from "lucide-react";
 
-// Define the shape of a single line item
+// Updated Interface to include HSN
 export interface LineItem {
   id: number;
   description: string;
+  hsn: string; // New Field for HSN/SAC Code
   quantity: number;
   rate: number;
   amount: number;
@@ -27,8 +28,9 @@ export function InvoiceItemsTable({ items, setItems, currency = "INR" }: Invoice
 
   const addItem = () => {
     const newItem: LineItem = {
-      id: Date.now(), // Simple unique ID
+      id: Date.now(),
       description: "",
+      hsn: "", // Initialize empty
       quantity: 1,
       rate: 0,
       amount: 0,
@@ -44,6 +46,7 @@ export function InvoiceItemsTable({ items, setItems, currency = "INR" }: Invoice
     const newItems = items.map((item) => {
       if (item.id === id) {
         const updatedItem = { ...item, [field]: value };
+        
         // Auto-calculate amount if qty or rate changes
         if (field === "quantity" || field === "rate") {
             updatedItem.amount = Number(updatedItem.quantity) * Number(updatedItem.rate);
@@ -63,23 +66,36 @@ export function InvoiceItemsTable({ items, setItems, currency = "INR" }: Invoice
         <Table>
           <TableHeader className="bg-slate-50">
             <TableRow>
-              <TableHead className="w-[40%]">Description</TableHead>
-              <TableHead className="w-[15%]">Qty</TableHead>
+              <TableHead className="w-[35%]">Description</TableHead>
+              <TableHead className="w-[15%]">HSN / SAC</TableHead>
+              <TableHead className="w-[10%]">Qty</TableHead>
               <TableHead className="w-[20%]">Rate</TableHead>
-              <TableHead className="w-[20%] text-right">Amount</TableHead>
+              <TableHead className="w-[15%] text-right">Amount</TableHead>
               <TableHead className="w-[5%]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {items.map((item) => (
               <TableRow key={item.id}>
+                {/* Description */}
                 <TableCell>
                   <Input 
-                    placeholder="Item name / Service" 
+                    placeholder="Item name / Service description" 
                     value={item.description}
                     onChange={(e) => updateItem(item.id, "description", e.target.value)}
                   />
                 </TableCell>
+
+                {/* HSN Code (New Column) */}
+                <TableCell>
+                  <Input 
+                    placeholder="1234" 
+                    value={item.hsn}
+                    onChange={(e) => updateItem(item.id, "hsn", e.target.value)}
+                  />
+                </TableCell>
+
+                {/* Quantity */}
                 <TableCell>
                   <Input 
                     type="number" 
@@ -88,6 +104,8 @@ export function InvoiceItemsTable({ items, setItems, currency = "INR" }: Invoice
                     onChange={(e) => updateItem(item.id, "quantity", Number(e.target.value))}
                   />
                 </TableCell>
+
+                {/* Rate */}
                 <TableCell>
                   <Input 
                     type="number" 
@@ -96,9 +114,13 @@ export function InvoiceItemsTable({ items, setItems, currency = "INR" }: Invoice
                     onChange={(e) => updateItem(item.id, "rate", Number(e.target.value))}
                   />
                 </TableCell>
+
+                {/* Amount Display */}
                 <TableCell className="text-right font-medium">
                   {new Intl.NumberFormat('en-IN', { style: 'currency', currency: currency }).format(item.amount)}
                 </TableCell>
+
+                {/* Delete Button */}
                 <TableCell>
                   <Button variant="ghost" size="icon" onClick={() => removeItem(item.id)}>
                     <Trash2 className="h-4 w-4 text-red-500" />

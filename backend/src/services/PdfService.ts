@@ -18,7 +18,7 @@ export class PdfService {
     if (!invoice) throw new Error("Invoice not found");
 
     // 2. Fetch Owner Profile for the Header
-    const ownerSettings = await prisma.systemsetting.findUnique({
+    const ownerSettings = await prisma.systemSetting.findUnique({
       where: { key: 'COMPANY_PROFILE' }
     });
 

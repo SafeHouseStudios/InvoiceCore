@@ -39,12 +39,12 @@ export class InvoiceService {
 
       // 2. Get Next Sequence Number
       // We look for a sequence for "24-25". If not found, create one starting at 0.
-      let sequence = await tx.invoicesequence.findUnique({
+      let sequence = await tx.invoiceSequence.findUnique({
         where: { fiscal_year: fy }
       });
 
       if (!sequence) {
-        sequence = await tx.invoicesequence.create({
+        sequence = await tx.invoiceSequence.create({
           data: { fiscal_year: fy, last_count: 0 }
         });
       }
@@ -57,7 +57,7 @@ export class InvoiceService {
       const invoiceNumber = `DDP/${fy}/${paddedCount}`;
 
       // 4. Update the Sequence
-      await tx.invoicesequence.update({
+      await tx.invoiceSequence.update({
         where: { id: sequence.id },
         data: { last_count: nextCount }
       });

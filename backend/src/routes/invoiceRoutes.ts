@@ -74,4 +74,22 @@ router.get('/:id/pdf', async (req, res) => {
   }
 });
 
+// PATCH: Update Invoice Status
+router.patch('/:id/status', async (req, res) => {
+  try {
+    const invoiceId = Number(req.params.id);
+    const { status } = req.body; // 'PAID', 'SENT', 'DRAFT'
+
+    // @ts-ignore
+    const updated = await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { status }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
 export default router;

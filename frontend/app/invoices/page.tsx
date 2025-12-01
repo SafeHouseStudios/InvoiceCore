@@ -5,16 +5,22 @@ import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Printer, FileText } from "lucide-react";
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu";
+import { Plus, Printer, MoreHorizontal, CheckCircle, Send, FileEdit, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 
-// Define what an Invoice looks like coming from the API
+// Define what an Invoice looks like
 interface Invoice {
   id: number;
   invoice_number: string;
   issue_date: string;
-  grand_total: string; // Decimal comes as string from JSON often
+  grand_total: string;
   status: string;
   client: {
     company_name: string;
@@ -24,21 +30,63 @@ interface Invoice {
 export default function InvoiceListPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
-  // Fetch data on load
+  // 1. Fetch Invoices on Load
   useEffect(() => {
     const fetchInvoices = async () => {
       try {
         const res = await api.get('/invoices');
         setInvoices(res.data);
       } catch (err) {
-        console.error("Failed to load", err);
+        console.error("Failed to load invoices", err);
       } finally {
         setLoading(false);
       }
     };
     fetchInvoices();
   }, []);
+
+  // 2. Handle Status Update
+  const handleStatusChange = async (id: number, newStatus: string) => {
+    try {
+      // Optimistic UI Update (Change it immediately on screen)
+      setInvoices(prev => prev.map(inv => 
+        inv.id === id ? { ...inv, status: newStatus } : inv
+      ));
+
+      // Send to Backend
+      await api.patch(`/invoices/${id}/status`, { status: newStatus });
+    } catch (e) {
+      alert("Failed to update status");
+      // Revert if failed (Optional, but good practice)
+      window.location.reload();
+    }
+  };
+
+  // 3. Handle Secure PDF Download
+  const handleDownloadPdf = async (id: number, invoiceNumber: string) => {
+    try {
+      setDownloadingId(id);
+      const response = await api.get(`/invoices/${id}/pdf`, { responseType: 'blob' });
+      
+      // Create a temporary link to trigger download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      // Clean filename (replace slashes with dashes)
+      const safeName = invoiceNumber.replace(/\//g, '-');
+      link.setAttribute('download', `invoice-${safeName}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (e) {
+      console.error(e);
+      alert("Failed to download PDF");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 p-8 space-y-6">
@@ -64,7 +112,9 @@ export default function InvoiceListPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="p-10 text-center text-slate-400">Loading records...</div>
+            <div className="p-10 text-center text-slate-400 flex justify-center">
+                <Loader2 className="animate-spin mr-2" /> Loading records...
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -98,17 +148,50 @@ export default function InvoiceListPage() {
                     </TableCell>
                     <TableCell>
                       <span className={`px-2 py-1 rounded-full text-xs font-semibold
-                        ${inv.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}
+                        ${inv.status === 'PAID' ? 'bg-green-100 text-green-700' : ''}
+                        ${inv.status === 'SENT' ? 'bg-blue-100 text-blue-700' : ''}
+                        ${inv.status === 'DRAFT' ? 'bg-gray-100 text-gray-700' : ''}
                       `}>
                         {inv.status}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right space-x-2">
-                    <a href={`http://localhost:5000/api/invoices/${inv.id}/pdf`} target="_blank" rel="noreferrer">
-                        <Button variant="outline" size="icon">
-                        <Printer className="w-4 h-4" />
-                        </Button>
-                    </a>
+                    <TableCell className="text-right flex justify-end gap-2">
+                       
+                       {/* Print Button */}
+                       <Button 
+                         variant="outline" 
+                         size="icon" 
+                         title="Download PDF"
+                         onClick={() => handleDownloadPdf(inv.id, inv.invoice_number)}
+                         disabled={downloadingId === inv.id}
+                       >
+                         {downloadingId === inv.id ? (
+                             <Loader2 className="w-4 h-4 animate-spin" />
+                         ) : (
+                             <Printer className="w-4 h-4" />
+                         )}
+                       </Button>
+
+                       {/* Status Menu */}
+                       <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="icon">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'PAID')}>
+                               <CheckCircle className="w-4 h-4 mr-2 text-green-600" /> Mark as Paid
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'SENT')}>
+                               <Send className="w-4 h-4 mr-2 text-blue-600" /> Mark as Sent
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'DRAFT')}>
+                               <FileEdit className="w-4 h-4 mr-2 text-gray-500" /> Mark as Draft
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                       </DropdownMenu>
+
                     </TableCell>
                   </TableRow>
                 ))}

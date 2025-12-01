@@ -8,31 +8,41 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
-import { CalendarIcon, Save, Loader2 } from "lucide-react";
-import { InvoiceItemsTable, LineItem } from "./invoice-items";
-import api from "@/lib/api"; // Import our API bridge
-
-// --- Mock Data for Testing ---
-// In the real app, we will fetch this from the database
-const MOCK_CLIENTS = [
-  { id: 1, name: "Local Customer (WB)", state_code: 19, country: "India" }, // Same as Owner
-  { id: 2, name: "Interstate Customer (Mumbai)", state_code: 27, country: "India" }, // Different State
-  { id: 3, name: "International Client (US)", state_code: 99, country: "USA" } // Export
-];
+import { CalendarIcon, Save, Loader2, PlusCircle } from "lucide-react";
+import { InvoiceItemsTable, LineItem } from "./invoice-items"; // Ensure this file exists in the same folder
+import api from "@/lib/api"; 
+import Link from "next/link";
+import { useRouter } from 'next/navigation';
 
 export default function NewInvoicePage() {
-  // --- Form State ---
-  const [issueDate, setIssueDate] = useState<Date | undefined>(new Date());
-  const [invoiceNumber, setInvoiceNumber] = useState("DDP/24-25/001");
-  const [selectedClientId, setSelectedClientId] = useState<string>("");
-  const [isCalculating, setIsCalculating] = useState(false);
+  const router = useRouter();
 
-  // --- Line Items State ---
+  // --- 1. State Management ---
+  const [issueDate, setIssueDate] = useState<Date | undefined>(new Date());
+  const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
+  const [invoiceNumber, setInvoiceNumber] = useState("DDP/24-25/XXX"); // Placeholder, backend generates real one
+  
+  // Clients Data
+  const [clients, setClients] = useState<any[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
+  
+  // UI States
+  const [isCalculating, setIsCalculating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Line Items
   const [items, setItems] = useState<LineItem[]>([
-    { id: 1, description: "Car Detailing - Premium", quantity: 1, rate: 5000, amount: 5000 }
+    { 
+      id: 1, 
+      description: "Service Charge", 
+      hsn: "",  // <--- ADD THIS LINE
+      quantity: 1, 
+      rate: 0, 
+      amount: 0 
+    }
   ]);
 
-  // --- Financial State ---
+  // Financials
   const [subtotal, setSubtotal] = useState(0);
   const [taxData, setTaxData] = useState({
     taxType: "NONE", // 'IGST' | 'CGST_SGST' | 'NONE'
@@ -41,31 +51,48 @@ export default function NewInvoicePage() {
   });
   const [grandTotal, setGrandTotal] = useState(0);
 
-  // 1. Calculate Subtotal when items change
+  // --- 2. Data Fetching & Effects ---
+
+  // A. Fetch Clients on Load
+  useEffect(() => {
+    const loadClients = async () => {
+      try {
+        const res = await api.get('/clients');
+        setClients(res.data);
+      } catch (err) {
+        console.error("Failed to load clients", err);
+      }
+    };
+    loadClients();
+  }, []);
+
+  // B. Calculate Subtotal whenever items change
   useEffect(() => {
     const newSubtotal = items.reduce((sum, item) => sum + item.amount, 0);
     setSubtotal(newSubtotal);
   }, [items]);
 
-  // 2. Fetch Tax Logic from Backend when Client or Subtotal changes
+  // C. Calculate Tax whenever Client or Subtotal changes
   useEffect(() => {
     const fetchTaxLogic = async () => {
+      // Don't calculate if no client selected or empty subtotal
       if (!selectedClientId) return;
 
-      const client = MOCK_CLIENTS.find(c => c.id.toString() === selectedClientId);
+      const client = clients.find(c => c.id.toString() === selectedClientId);
       if (!client) return;
 
       setIsCalculating(true);
       try {
-        // CALL THE BACKEND
+        // Ask Backend: "What tax applies to this client?"
         const response = await api.post('/invoices/calculate-tax', {
           clientStateCode: client.state_code,
           clientCountry: client.country
         });
 
-        const backendTax = response.data; // { taxType, breakdown: { cgst, ... } }
+        const backendTax = response.data; 
         
-        // Apply the rate to the current subtotal
+        // Calculate actual amounts based on the rate returned
+        // Logic: (Subtotal * Rate) / 100
         const calculatedTax = {
             ...backendTax,
             breakdown: {
@@ -85,92 +112,98 @@ export default function NewInvoicePage() {
     };
 
     fetchTaxLogic();
-  }, [selectedClientId, subtotal]); // Re-run if client switches or amounts change
+  }, [selectedClientId, subtotal, clients]);
 
-  // 3. Update Grand Total
+  // D. Update Grand Total
   useEffect(() => {
     const totalTax = taxData.breakdown.cgst + taxData.breakdown.sgst + taxData.breakdown.igst;
     setGrandTotal(subtotal + totalTax);
   }, [subtotal, taxData]);
 
-  // --- Actions ---
+
+  // --- 3. Save Handler ---
   const handleSave = async () => {
     if (!selectedClientId) {
       alert("Please select a client first.");
       return;
     }
+    if (items.length === 0 || subtotal === 0) {
+      alert("Please add at least one item with a price.");
+      return;
+    }
 
     try {
-      setIsCalculating(true); // Reuse loading state
+      setIsSaving(true);
       
       const payload = {
         clientId: Number(selectedClientId),
         issueDate: issueDate?.toISOString(),
-        dueDate: null, // We can add a due date picker later
+        dueDate: dueDate?.toISOString(),
         items: items,
         taxSummary: taxData,
         subtotal: subtotal,
         grandTotal: grandTotal
       };
 
-      console.log("Sending Payload:", payload);
-
       const response = await api.post('/invoices', payload);
       
-      alert(`Success! Invoice Saved: ${response.data.invoice_number}`);
-      
-      // Optional: Redirect to dashboard or clear form
-      // window.location.href = '/dashboard';
+      alert(`Success! Invoice Created: ${response.data.invoice_number}`);
+      router.push('/invoices'); // Redirect to list view
 
     } catch (error) {
       console.error(error);
-      alert("Failed to save invoice. Check console.");
+      alert("Failed to save invoice. Please check console for details.");
     } finally {
-      setIsCalculating(false);
+      setIsSaving(false);
     }
   };
 
+  // --- 4. Render ---
   return (
     <div className="min-h-screen bg-slate-50 p-6 space-y-6">
       
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">New Invoice</h1>
           <p className="text-sm text-slate-500">Create a new invoice for a client</p>
         </div>
-        <Button onClick={handleSave} className="bg-slate-900 hover:bg-slate-800">
-          {isCalculating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-          Save Invoice
+        <Button onClick={handleSave} disabled={isSaving} className="bg-slate-900 hover:bg-slate-800">
+          {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+          {isSaving ? "Saving..." : "Save Invoice"}
         </Button>
       </div>
 
+      {/* Main Form Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         
-        {/* Client Selector */}
+        {/* Client Selection */}
         <Card className="md:col-span-1 shadow-sm">
           <CardContent className="p-6 space-y-4">
             <div className="space-y-2">
-              <Label>Client</Label>
+              <div className="flex justify-between items-center">
+                <Label>Client</Label>
+                <Link href="/clients/new" className="text-xs text-blue-600 hover:underline flex items-center">
+                    <PlusCircle className="w-3 h-3 mr-1" /> New Client
+                </Link>
+              </div>
               <select 
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 value={selectedClientId}
                 onChange={(e) => setSelectedClientId(e.target.value)}
               >
                 <option value="">Select Client...</option>
-                {MOCK_CLIENTS.map(client => (
+                {clients.map(client => (
                   <option key={client.id} value={client.id}>
-                    {client.name}
+                    {client.company_name} ({client.state_code})
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-slate-400">
-                *Select "Local" or "Interstate" to test Tax Engine
-              </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Date Picker */}
+        {/* Date Selection */}
         <Card className="md:col-span-1 shadow-sm">
           <CardContent className="p-6 space-y-4">
             <div className="space-y-2 flex flex-col">
@@ -190,17 +223,24 @@ export default function NewInvoicePage() {
           </CardContent>
         </Card>
 
-        {/* Invoice Number */}
+        {/* Invoice Info (Read Only) */}
         <Card className="md:col-span-1 shadow-sm">
           <CardContent className="p-6 space-y-4">
             <div className="space-y-2">
               <Label>Invoice #</Label>
-              <Input value={invoiceNumber} readOnly className="font-mono bg-slate-50" />
+              <Input 
+                value={invoiceNumber} 
+                readOnly 
+                className="font-mono bg-slate-100 text-slate-500 cursor-not-allowed" 
+                title="Generated automatically upon saving"
+              />
+              <p className="text-[10px] text-slate-400">Auto-generated upon save</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
+      {/* Line Items & Totals */}
       <Card className="shadow-sm">
         <CardContent className="p-6">
           <InvoiceItemsTable items={items} setItems={setItems} />
@@ -215,7 +255,7 @@ export default function NewInvoicePage() {
 
               {/* Dynamic Tax Rendering */}
               {isCalculating ? (
-                <div className="flex items-center justify-end text-xs text-slate-400">
+                <div className="flex items-center justify-end text-xs text-slate-400 py-2">
                     <Loader2 className="w-3 h-3 animate-spin mr-1" /> Calculating Tax...
                 </div>
               ) : (
