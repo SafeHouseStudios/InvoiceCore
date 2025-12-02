@@ -1,8 +1,13 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import sanitizeHtml from 'sanitize-html';
 
 const router = Router();
 const prisma = new PrismaClient();
+
+// ==============================
+// 1. COMPANY PROFILE
+// ==============================
 
 // GET: Fetch Company Profile
 router.get('/company', async (req, res) => {
@@ -20,7 +25,6 @@ router.get('/company', async (req, res) => {
 // PUT: Update Company Profile
 router.put('/company', async (req, res) => {
   try {
-    // FIX: Added 'stamp' to the list of saved fields
     const { 
       company_name, address, state_code, gstin, phone, email, 
       bank_details, logo, signature, stamp 
@@ -36,7 +40,7 @@ router.put('/company', async (req, res) => {
           bank_details,
           logo,       // Path to Logo
           signature,  // Path to Signature
-          stamp       // <--- NEW: Path to Stamp
+          stamp       // Path to Stamp
         }
       },
       create: {
@@ -48,7 +52,7 @@ router.put('/company', async (req, res) => {
           bank_details,
           logo,
           signature,
-          stamp       // <--- NEW
+          stamp
         }
       }
     });
@@ -61,7 +65,7 @@ router.put('/company', async (req, res) => {
 });
 
 // ==============================
-// DOCUMENT SETTINGS (Formats)
+// 2. DOCUMENT SETTINGS (Formats)
 // ==============================
 
 // GET: Fetch Document Settings
@@ -76,7 +80,7 @@ router.get('/documents', async (req, res) => {
     const defaults = {
       invoice_format: "INV/{FY}/{SEQ:3}",
       quotation_format: "QTN/{FY}/{SEQ:3}",
-      invoice_label: "INVOICE", // Requirement #18 (Custom Label)
+      invoice_label: "INVOICE",
       quotation_label: "QUOTATION"
     };
 
@@ -111,7 +115,7 @@ router.put('/documents', async (req, res) => {
 });
 
 // ==============================
-// SEQUENCE MANAGEMENT (Start Number)
+// 3. SEQUENCE MANAGEMENT (Start Number)
 // ==============================
 
 // PUT: Set Next Sequence Number
@@ -153,6 +157,56 @@ router.put('/sequence', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to update sequence" });
+  }
+});
+
+// ==============================
+// 4. CUSTOM HTML TEMPLATES
+// ==============================
+
+// POST: Save Custom Template
+router.post('/template', async (req, res) => {
+  try {
+    const { html, type } = req.body; // type = 'INVOICE' or 'QUOTATION'
+    const key = type === 'QUOTATION' ? 'QUOTATION_TEMPLATE' : 'INVOICE_TEMPLATE';
+
+    // SERVER-SIDE SANITIZATION (Security Critical)
+    // Allows basic styling but strips scripts/iframes
+    const cleanHtml = sanitizeHtml(html, {
+      allowedTags: sanitizeHtml.defaults.allowedTags.concat([ 'img', 'style', 'h1', 'h2', 'h3', 'span', 'div', 'table', 'tbody', 'thead', 'tr', 'td', 'th', 'strong', 'b', 'i', 'u', 'br', 'p' ]),
+      allowedAttributes: {
+        '*': ['style', 'class', 'id', 'width', 'height', 'align', 'border', 'cellpadding', 'cellspacing'],
+        'img': ['src', 'alt']
+      },
+      allowedSchemes: ['http', 'https', 'data'], // Allow base64 images
+      allowVulnerableTags: true // Required for <style> tags to work in PDF
+    });
+
+    // Save to DB
+    // @ts-ignore
+    await prisma.systemSetting.upsert({
+      where: { key },
+      update: { value: cleanHtml },
+      create: { key, value: cleanHtml, is_locked: false }
+    });
+
+    res.json({ success: true, message: "Template saved successfully" });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to save template" });
+  }
+});
+
+// GET: Fetch Template
+router.get('/template/:type', async (req, res) => {
+  try {
+    const key = req.params.type === 'QUOTATION' ? 'QUOTATION_TEMPLATE' : 'INVOICE_TEMPLATE';
+    // @ts-ignore
+    const setting = await prisma.systemSetting.findUnique({ where: { key } });
+    res.json({ html: setting?.value || '' });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch template" });
   }
 });
 

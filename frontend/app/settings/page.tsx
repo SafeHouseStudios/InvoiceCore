@@ -11,6 +11,8 @@ import { BankSettings } from '@/components/settings/BankSettings';
 import { EmailSettings } from '@/components/settings/EmailSettings';
 import { TeamSettings } from '@/components/settings/TeamSettings';
 import { BackupSettings } from '@/components/settings/BackupSettings';
+import { TemplateSettings } from '@/components/settings/TemplateSettings';
+import { Code } from "lucide-react";
 
 export default function SettingsPage() {
   const [profile, setProfile] = useState<any>({});
@@ -58,6 +60,7 @@ export default function SettingsPage() {
           <TabsList className="bg-transparent h-auto p-0 gap-1 flex">
             <TabItem value="general" icon={<Building2 className="w-4 h-4"/>} label="Profile" />
             <TabItem value="branding" icon={<Upload className="w-4 h-4"/>} label="Branding" />
+            <TabItem value="templates" icon={<Code className="w-4 h-4"/>} label="Templates" />
             <TabItem value="documents" icon={<FileText className="w-4 h-4"/>} label="Documents" />
             <TabItem value="bank" icon={<Wallet className="w-4 h-4"/>} label="Banking" />
             <TabItem value="email" icon={<Mail className="w-4 h-4"/>} label="Email" />
@@ -69,11 +72,12 @@ export default function SettingsPage() {
         <TabsContent value="general">
            <GeneralSettings profile={profile} handleChange={handleProfileChange} handleSave={handleSaveProfile} loading={loading} />
         </TabsContent>
-
         <TabsContent value="branding">
            <BrandingSettings profile={profile} handleFileUpload={handleFileUpload} handleSave={handleSaveProfile} loading={loading} />
         </TabsContent>
-
+        <TabsContent value="templates" className="mt-0 h-full">
+          <TemplateSettings />
+        </TabsContent>
         <TabsContent value="documents"><DocumentSettings /></TabsContent>
         <TabsContent value="bank"><BankSettings /></TabsContent>
         <TabsContent value="email"><EmailSettings /></TabsContent>

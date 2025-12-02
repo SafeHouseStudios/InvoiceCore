@@ -10,37 +10,46 @@ interface CreateQuotationDTO {
   subtotal: number;
   grandTotal: number;
   remarks?: string;
-  contractTerms?: string; // Maps to "Contract Tenure"
-  servicesOffered?: string; // Maps to "Services Offered"
+  contractTerms?: string;
+  servicesOffered?: string;
   currency?: string;
   bankAccountId?: number;
 }
 
 export class QuotationService {
   
+  // 1. GET ALL
   static async getAllQuotations() {
     // @ts-ignore
-    return await prisma.quotation.findMany({ include: { client: true }, orderBy: { created_at: 'desc' } });
+    return await prisma.quotation.findMany({ 
+        include: { client: true }, 
+        orderBy: { created_at: 'desc' } 
+    });
   }
 
-  private static getFiscalYear(date: Date): string {
-    const month = date.getMonth() + 1;
-    const year = date.getFullYear();
-    const shortYear = year % 100;
-    return month >= 4 ? `${shortYear}-${shortYear + 1}` : `${shortYear - 1}-${shortYear}`;
+  // 2. GET SINGLE
+  static async getQuotationById(id: number) {
+    // @ts-ignore
+    return await prisma.quotation.findUnique({
+      where: { id },
+      include: { client: true }
+    });
   }
 
+  // 3. CREATE
   static async createQuotation(data: CreateQuotationDTO) {
     return await prisma.$transaction(async (tx) => {
       const dateObj = new Date(data.issueDate);
       
-      // A. Fetch Settings
       // @ts-ignore
       const setting = await tx.systemSetting.findUnique({ where: { key: 'DOCUMENT_SETTINGS' } });
       const format = (setting?.json_value as any)?.quotation_format || "QTN/{FY}/{SEQ:3}";
 
-      // B. Sequence Logic
-      const fy = this.getFiscalYear(dateObj);
+      const month = dateObj.getMonth() + 1;
+      const year = dateObj.getFullYear();
+      const shortYear = year % 100;
+      const fy = month >= 4 ? `${shortYear}-${shortYear + 1}` : `${shortYear - 1}-${shortYear}`;
+
       // @ts-ignore
       let sequence = await tx.quotationSequence.findUnique({ where: { fiscal_year: fy } });
       if (!sequence) {
@@ -51,7 +60,6 @@ export class QuotationService {
       // @ts-ignore
       await tx.quotationSequence.update({ where: { id: sequence.id }, data: { last_count: nextCount } });
 
-      // C. Parse Format
       let numStr = format
           .replace('{FY}', fy)
           .replace('{YYYY}', dateObj.getFullYear().toString())
@@ -65,8 +73,6 @@ export class QuotationService {
           numStr = `${numStr}-${nextCount}`;
       }
 
-      
-
       // @ts-ignore
       return await tx.quotation.create({
         data: {
@@ -76,12 +82,9 @@ export class QuotationService {
           expiry_date: data.expiryDate ? new Date(data.expiryDate) : null,
           status: 'DRAFT',
           line_items: data.items,
-          
-          // MAPPED FIELDS
-          contract_terms: data.contractTerms, // "Contract Tenure"
-          services_offered: data.servicesOffered, // "Services Offered"
+          contract_terms: data.contractTerms,
+          services_offered: data.servicesOffered,
           remarks: data.remarks,
-          
           subtotal: data.subtotal,
           grand_total: data.grandTotal,
           currency: data.currency || 'INR',
@@ -91,7 +94,27 @@ export class QuotationService {
     });
   }
 
-  // NEW: Delete Quotation
+  // 4. UPDATE
+  static async updateQuotation(id: number, data: any) {
+    // @ts-ignore
+    return await prisma.quotation.update({
+      where: { id },
+      data: {
+        client_id: data.clientId,
+        issue_date: new Date(data.issueDate),
+        expiry_date: data.expiryDate ? new Date(data.expiryDate) : null,
+        line_items: data.items,
+        contract_terms: data.contractTerms,
+        services_offered: data.servicesOffered,
+        remarks: data.remarks,
+        subtotal: data.subtotal,
+        grand_total: data.grandTotal,
+        // Allow status update if needed, or handle separately
+      }
+    });
+  }
+
+  // 5. DELETE
   static async deleteQuotation(id: number) {
     // @ts-ignore
     return await prisma.quotation.delete({
