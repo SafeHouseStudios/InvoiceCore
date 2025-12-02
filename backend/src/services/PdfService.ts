@@ -1,16 +1,15 @@
-// @ts-nocheck
+// backend/src/services/PdfService.ts
 import puppeteer from 'puppeteer-core';
 import { PrismaClient } from '@prisma/client';
 import { generateInvoiceHTML } from './templates/InvoiceTemplate';
 import { generateQuotationHTML } from './templates/QuotationTemplate';
-import Mustache from 'mustache';
-import { format } from 'date-fns';
 
 const prisma = new PrismaClient();
 
 export class PdfService {
   
   static async generateInvoicePdf(invoiceId: number) {
+    // @ts-ignore
     const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
       include: { client: true, bank_account: true }
@@ -18,35 +17,33 @@ export class PdfService {
 
     if (!invoice) throw new Error("Invoice not found");
 
-    const ownerSettings = await prisma.systemSetting.findUnique({ where: { key: 'COMPANY_PROFILE' } });
-    
-    // Force bypass of DB template to ensure new code is used
-    const templateSetting = null; 
+    // @ts-ignore
+    const ownerSettings = await prisma.systemSetting.findUnique({ 
+      where: { key: 'COMPANY_PROFILE' } 
+    });
 
-    let htmlContent = "";
-
-    if (templateSetting?.value) {
-        // Legacy Mustache Logic (Skipped for now)
-        htmlContent = ""; 
-    } else {
-        // Use the new Blue Dapper Template
-        htmlContent = generateInvoiceHTML(invoice, ownerSettings);
-    }
+    // Generate HTML using the new template
+    const htmlContent = generateInvoiceHTML(invoice, ownerSettings);
 
     return await this.createPdf(htmlContent);
   }
 
   static async generateQuotationPdf(quotationId: number) {
+    // @ts-ignore
     const quotation = await prisma.quotation.findUnique({
       where: { id: quotationId },
-      include: { client: true }
+      include: { client: true, bank_account: true }
     });
 
     if (!quotation) throw new Error("Quotation not found");
 
-    const ownerSettings = await prisma.systemSetting.findUnique({ where: { key: 'COMPANY_PROFILE' } });
+    // @ts-ignore
+    const ownerSettings = await prisma.systemSetting.findUnique({ 
+      where: { key: 'COMPANY_PROFILE' } 
+    });
+
+    const htmlContent = generateQuotationHTML(quotation, ownerSettings);
     
-    htmlContent = generateQuotationHTML(quotation, ownerSettings);
     return await this.createPdf(htmlContent);
   }
 

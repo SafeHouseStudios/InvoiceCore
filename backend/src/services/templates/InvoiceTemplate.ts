@@ -31,19 +31,34 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any) => {
 
   const logoSrc = getBase64Image(profile.logo);
 
-  // Tax Logic
+  // Calculate tax details
   let taxRows = '';
+  let taxLabel = '';
+  let taxAmount = 0;
+
   if (tax.taxType === 'IGST') {
-      taxRows += `<tr><td>IGST (${tax.gstRate}%)</td><td>${formatCurrency(tax.breakdown.igst)}</td></tr>`;
+      taxLabel = `IGST ${tax.gstRate}%`;
+      taxAmount = tax.breakdown.igst;
   } else if (tax.taxType === 'CGST_SGST') {
-      taxRows += `<tr><td>CGST (${tax.gstRate/2}%)</td><td>${formatCurrency(tax.breakdown.cgst)}</td></tr>`;
-      taxRows += `<tr><td>SGST (${tax.gstRate/2}%)</td><td>${formatCurrency(tax.breakdown.sgst)}</td></tr>`;
+      taxLabel = `CGST+SGST ${tax.gstRate}%`;
+      taxAmount = tax.breakdown.cgst + tax.breakdown.sgst;
   } else {
       const totalTax = (Number(invoice.grand_total) - Number(invoice.subtotal));
       if (totalTax > 0) {
-        taxRows += `<tr><td>HST 13%</td><td>${formatCurrency(totalTax)}</td></tr>`;
+        taxLabel = 'HST 13%';
+        taxAmount = totalTax;
       }
   }
+
+  // Generate Line Items
+  const lineItemsHTML = items.map((item: any, index: number) => `
+    <tr>
+        <td style="padding: 10px; border: 1px solid #E5E7EB; font-size: 10pt;">${item.hsn || 'Interior Detail - Subaru'}</td>
+        <td style="padding: 10px; border: 1px solid #E5E7EB; font-size: 10pt;">${item.description}</td>
+        <td style="padding: 10px; border: 1px solid #E5E7EB; text-align: center; font-size: 10pt;">${item.quantity}</td>
+        <td style="padding: 10px; border: 1px solid #E5E7EB; text-align: right; font-size: 10pt;">${formatCurrency(item.amount)}</td>
+    </tr>
+  `).join('');
 
   return `
 <!DOCTYPE html>
@@ -52,203 +67,270 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any) => {
 <meta charset="UTF-8">
 <title>Invoice ${invoice.invoice_number}</title>
 <style>
-    @page { margin: 0; size: A4; }
-    :root {
-        /* BLUE BRANDING */
-        --accent: #2563EB; 
-        --border: #E5E7EB;
-        --text: #1F2937;
+    @page { 
+        margin: 0; 
+        size: A4; 
     }
-    * { box-sizing: border-box; }
+    
+    * { 
+        box-sizing: border-box; 
+        margin: 0; 
+        padding: 0; 
+    }
+
     body {
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-family: Arial, sans-serif;
         font-size: 10pt;
-        color: var(--text);
-        margin: 0;
-        padding: 40px 50px;
+        color: #000;
+        line-height: 1.4;
         background: #fff;
     }
 
+    .page-wrapper {
+        padding: 30px 40px;
+        max-width: 210mm;
+        margin: 0 auto;
+    }
+
     /* HEADER */
-    .invoice-header {
+    .header {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        margin-bottom: 30px;
-    }
-    .company-name {
-        font-size: 22px;
-        font-weight: 800;
-        color: #000;
-        border-bottom: 3px solid var(--accent);
-        display: inline-block;
-        padding-bottom: 5px;
-        margin-bottom: 10px;
-    }
-    .company-meta-line { font-size: 9pt; color: #555; margin-bottom: 2px; }
-    #company-logo { max-width: 150px; max-height: 80px; object-fit: contain; }
-
-    /* META */
-    .invoice-meta {
-        display: flex;
-        justify-content: space-between;
-        font-weight: 700;
         margin-bottom: 25px;
-        font-size: 10pt;
+        padding-bottom: 15px;
+        border-bottom: 1px solid #ddd;
     }
 
-    /* CLIENT CARD */
-    #client-card {
-        border: 1px solid var(--border);
-        background: #FAFAFA;
-        padding: 15px;
-        border-radius: 5px;
-        margin-bottom: 30px;
-        width: 65%;
+    .company-section {
+        flex: 1;
     }
-    #client-card-title {
+
+    .company-name {
+        font-size: 18pt;
         font-weight: 700;
-        color: var(--accent);
-        font-size: 9pt;
-        text-transform: uppercase;
+        color: #000;
         margin-bottom: 8px;
     }
-    .client-text { font-size: 10pt; line-height: 1.4; }
+
+    .company-info {
+        font-size: 8pt;
+        color: #333;
+        line-height: 1.5;
+    }
+
+    .logo-section {
+        text-align: right;
+    }
+
+    .company-logo {
+        max-width: 100px;
+        max-height: 100px;
+        object-fit: contain;
+    }
+
+    /* META ROW */
+    .meta-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 25px;
+        font-size: 9pt;
+    }
+
+    .meta-item {
+        flex: 1;
+    }
+
+    .meta-label {
+        font-weight: 700;
+        color: #000;
+    }
+
+    /* CLIENT SECTION */
+    .client-section {
+        margin-bottom: 25px;
+        padding: 15px;
+        background: #f9f9f9;
+        border: 1px solid #ddd;
+    }
+
+    .client-title {
+        font-weight: 700;
+        font-size: 10pt;
+        margin-bottom: 8px;
+        color: #000;
+    }
+
+    .client-details {
+        font-size: 9pt;
+        color: #333;
+        line-height: 1.6;
+    }
 
     /* TABLE */
-    #product-table {
+    .invoice-table {
         width: 100%;
         border-collapse: collapse;
         margin-bottom: 20px;
     }
-    #product-table th {
-        background: var(--accent);
+
+    .invoice-table thead th {
+        background: #ED1C43;
         color: #fff;
-        padding: 8px 10px;
-        font-weight: 700;
-        font-size: 10pt;
-        text-align: left;
-    }
-    #product-table td {
         padding: 10px;
-        border-bottom: 1px solid var(--border);
+        text-align: left;
         font-size: 10pt;
-        vertical-align: top;
+        font-weight: 700;
+        border: 1px solid #ED1C43;
     }
-    /* Column Alignment */
-    .col-qty { text-align: center; }
-    .col-total { text-align: right; }
-    th:last-child { text-align: right; }
+
+    .invoice-table thead th:nth-child(3),
+    .invoice-table thead th:nth-child(4) {
+        text-align: center;
+    }
+
+    .invoice-table tbody td {
+        font-size: 10pt;
+        color: #000;
+    }
 
     /* TOTALS */
-    #table-totals {
-        width: 250px;
-        margin-left: auto;
-        border: 1px solid var(--border);
-        background: #FAFAFA;
-        padding: 10px;
-        border-radius: 5px;
+    .totals-section {
+        float: right;
+        width: 300px;
+        margin-top: 10px;
     }
-    #table-totals table { width: 100%; border-collapse: collapse; }
-    #table-totals td { padding: 5px 0; font-size: 10pt; }
-    #table-totals td:last-child { text-align: right; font-weight: 600; }
-    .grand-total-label { color: #000; font-weight: 800; font-size: 12pt; }
-    .grand-total-value { color: var(--accent); font-weight: 800; font-size: 12pt; }
+
+    .totals-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 15px;
+        font-size: 10pt;
+        background: #f9f9f9;
+        margin-bottom: 2px;
+    }
+
+    .totals-row.grand-total {
+        background: #fff;
+        font-weight: 700;
+        font-size: 11pt;
+        border-top: 2px solid #000;
+        margin-top: 5px;
+    }
+
+    .totals-label {
+        color: #333;
+    }
+
+    .totals-value {
+        color: #000;
+        font-weight: 600;
+    }
 
     /* FOOTER */
     .footer {
-        position: fixed;
-        bottom: 40px;
-        left: 50px;
-        right: 50px;
+        clear: both;
+        margin-top: 80px;
+        padding-top: 15px;
+        border-top: 2px solid #ED1C43;
         text-align: center;
-        font-size: 9pt;
+        font-size: 8pt;
         color: #666;
     }
-    .footer-line {
-        height: 3px;
-        background: var(--accent);
-        width: 100%;
-        margin-bottom: 10px;
+
+    .footer-company {
+        font-weight: 700;
+        color: #000;
+        margin-bottom: 3px;
     }
 </style>
 </head>
 <body>
 
-<div class="invoice-wrapper">
-    <div class="invoice-header">
-        <div>
+<div class="page-wrapper">
+
+    <!-- HEADER -->
+    <div class="header">
+        <div class="company-section">
             <div class="company-name">${profile.company_name || 'Dapper Detailing Pros'}</div>
-            <div class="company-meta-line">
-                Email: ${profile.email || ''} | Phone: ${profile.phone || ''}
-            </div>
-            <div class="company-meta-line">
-                ${profile.gstin ? `BIN: ${profile.gstin}` : ''}
-            </div>
-            <div class="company-meta-line" style="margin-top:5px;">
-                ${profile.address ? profile.address.replace(/\n/g, ', ') : ''}
+            <div class="company-info">
+                <strong>Email:</strong> ${profile.email || 'info@dapperdetailing.ca'} | <strong>Phone:</strong> ${profile.phone || '+1 (705) 977-6217'}<br>
+                ${profile.gstin ? `<strong>BIN:</strong> ${profile.gstin.split(' | ')[0] || ''} | <strong>HST:</strong> ${profile.gstin.split(' | ')[1] || profile.gstin}<br>` : ''}
+                ${profile.address ? profile.address.replace(/\n/g, '<br>') : 'Peterborough, Ontario<br>Canada'}
             </div>
         </div>
-        <div>
-            ${logoSrc ? `<img id="company-logo" src="${logoSrc}" />` : ''}
+
+        <div class="logo-section">
+            ${logoSrc ? `<img src="${logoSrc}" class="company-logo" />` : ''}
         </div>
     </div>
 
-    <div class="invoice-meta">
-        <div>Invoice #: ${invoice.invoice_number}</div>
-        <div>Date: ${format(new Date(invoice.issue_date), "dd/MMM/yyyy")}</div>
-        <div>Due: ${invoice.due_date ? format(new Date(invoice.due_date), "dd/MMM/yyyy") : '-'}</div>
+    <!-- META ROW -->
+    <div class="meta-row">
+        <div class="meta-item">
+            <span class="meta-label">Invoice #:</span> ${invoice.invoice_number}
+        </div>
+        <div class="meta-item" style="text-align: center;">
+            <span class="meta-label">Date:</span> ${format(new Date(invoice.issue_date), "dd/MMM/yyyy")}
+        </div>
+        <div class="meta-item" style="text-align: right;">
+            <span class="meta-label">Due:</span> ${invoice.due_date ? format(new Date(invoice.due_date), "dd/MMM/yyyy") : '-'}
+        </div>
     </div>
 
-    <div id="client-card">
-        <div id="client-card-title">Client Details</div>
-        <div class="client-text">
+    <!-- CLIENT SECTION -->
+    <div class="client-section">
+        <div class="client-title">Client Details</div>
+        <div class="client-details">
             <strong>${invoice.client.company_name}</strong><br>
             ${invoice.client.phone ? invoice.client.phone + '<br>' : ''}
             ${invoice.client.email ? invoice.client.email + '<br>' : ''}
-            ${invoice.client.addresses?.billing?.street || ''}, 
-            ${invoice.client.addresses?.billing?.city || ''}
+            ${invoice.client.addresses?.billing?.street ? invoice.client.addresses.billing.street + ', ' : ''}${invoice.client.addresses?.billing?.city ? invoice.client.addresses.billing.city + ' ' : ''}${invoice.client.addresses?.billing?.zip ? invoice.client.addresses.billing.zip + ', ' : ''}${invoice.client.country || 'Canada'}
         </div>
     </div>
 
-    <table id="product-table">
+    <!-- ITEMS TABLE -->
+    <table class="invoice-table">
         <thead>
             <tr>
-                <th width="15%">Item No.</th>
-                <th width="50%">Description</th>
-                <th width="15%" class="col-qty">Qty</th>
-                <th width="20%" class="col-total">Line Total</th>
+                <th style="width: 20%;">Item No.</th>
+                <th style="width: 50%;">Description</th>
+                <th style="width: 10%; text-align: center;">Qty</th>
+                <th style="width: 20%; text-align: right;">Line Total</th>
             </tr>
         </thead>
         <tbody>
-            ${items.map((item: any) => `
-            <tr>
-                <td>${item.hsn || 'Service'}</td>
-                <td><strong>${item.description}</strong></td>
-                <td class="col-qty">${item.quantity}</td>
-                <td class="col-total">${formatCurrency(item.amount)}</td>
-            </tr>
-            `).join('')}
+            ${lineItemsHTML}
         </tbody>
     </table>
 
-    <div id="table-totals">
-        <table>
-            <tr><td>Subtotal</td><td>${formatCurrency(Number(invoice.subtotal))}</td></tr>
-            ${taxRows}
-            <tr>
-                <td class="grand-total-label" style="padding-top:10px;">Grand Total</td>
-                <td class="grand-total-value" style="padding-top:10px;">${formatCurrency(Number(invoice.grand_total))}</td>
-            </tr>
-        </table>
+    <!-- TOTALS -->
+    <div class="totals-section">
+        <div class="totals-row">
+            <div class="totals-label">Subtotal</div>
+            <div class="totals-value">${formatCurrency(Number(invoice.subtotal))}</div>
+        </div>
+        
+        ${taxAmount > 0 ? `
+        <div class="totals-row">
+            <div class="totals-label">${taxLabel}</div>
+            <div class="totals-value">${formatCurrency(taxAmount)}</div>
+        </div>
+        ` : ''}
+        
+        <div class="totals-row grand-total">
+            <div class="totals-label">Grand Total</div>
+            <div class="totals-value">${formatCurrency(Number(invoice.grand_total))}</div>
+        </div>
     </div>
-</div>
 
-<div class="footer">
-    <div class="footer-line"></div>
-    <strong>${profile.company_name || 'Dapper Detailing Pros'}</strong><br>
-    ${profile.email || ''} | https://dapperdetailing.ca<br>
-    This is a computer-generated invoice and no signature is required.
+    <!-- FOOTER -->
+    <div class="footer">
+        <div class="footer-company">${profile.company_name || 'Dapper Detailing Pros'}</div>
+        <div>${profile.email || 'info@dapperdetailing.ca'} | https://dapperdetailing.ca</div>
+        <div style="margin-top: 5px;">This is a computer-generated invoice and no signature is required.</div>
+    </div>
+
 </div>
 
 </body>
