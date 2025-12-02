@@ -20,8 +20,12 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any) => {
   const getBase64Image = (webPath: string) => {
     if (!webPath) return null;
     try {
+      // FIX: Remove leading slash to ensure path.join treats it as relative
+      // e.g. "/uploads/img.png" -> "uploads/img.png"
+      const cleanPath = webPath.startsWith('/') ? webPath.slice(1) : webPath;
+
       // Resolve path: backend/src/services/templates -> root/frontend/public
-      const systemPath = path.join(__dirname, '../../../../frontend/public', webPath);
+      const systemPath = path.join(__dirname, '../../../../frontend/public', cleanPath);
       
       if (fs.existsSync(systemPath)) {
         const bitmap = fs.readFileSync(systemPath);
@@ -40,6 +44,7 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any) => {
   // Load Branding Images
   const logoSrc = getBase64Image(ownerProfile?.json_value?.logo);
   const signatureSrc = getBase64Image(ownerProfile?.json_value?.signature);
+  const stampSrc = getBase64Image(ownerProfile?.json_value?.stamp);
 
   // Bank Details Logic
   let bankBlock = null;
@@ -99,7 +104,7 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any) => {
           padding-bottom: 20px; 
         }
         .company-logo {
-            max-width: 150px; 
+            max-width: 250px; 
             max-height: 80px; 
             margin-bottom: 15px;
             display: block;
@@ -205,6 +210,27 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any) => {
           border: 1px solid #fcd34d;
           border-radius: 4px;
           width: 60%;
+        }
+
+        /* Signature & Stamp Area */
+        .auth-section {
+            display: flex;
+            justify-content: flex-end;
+            align-items: flex-end;
+            margin-top: 40px;
+            gap: 20px;
+        }
+        .sign-box {
+            text-align: center;
+        }
+        .stamp-img {
+            max-width: 200px;
+            max-height: 200px;
+            opacity: 1;
+        }
+        .sign-img {
+            max-width: 150px;
+            max-height: 60px;
         }
       </style>
     </head>
@@ -345,14 +371,24 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any) => {
         </div>
       ` : ''}
 
-      <div class="footer">
-        ${signatureSrc ? `
-          <div style="text-align: right; margin-bottom: 10px;">
-            <img src="${signatureSrc}" style="max-width: 120px; max-height: 60px;" />
-            <div style="font-size: 10px; margin-top: 5px; font-weight: bold;">Authorised Signatory</div>
-          </div>
+      <div class="auth-section">
+        ${stampSrc ? `
+            <div class="sign-box">
+                <img src="${stampSrc}" class="stamp-img" />
+            </div>
         ` : ''}
-        
+
+        ${signatureSrc ? `
+            <div class="sign-box">
+                <img src="${signatureSrc}" class="sign-img" />
+                <div style="font-size: 10px; margin-top: 5px; font-weight: bold; border-top: 1px solid #333; padding-top: 5px;">
+                    Authorised Signatory
+                </div>
+            </div>
+        ` : ''}
+      </div>
+
+      <div class="footer">
         This is a computer-generated invoice and does not require a physical signature.
       </div>
 

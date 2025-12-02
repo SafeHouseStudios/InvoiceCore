@@ -30,9 +30,12 @@ router.get('/stats', async (req, res) => {
         _sum: { amount: true } 
     });
 
+    const totalInvoicesCount = await prisma.invoice.count();
+
     res.json({
       revenueChart: revenueData,
       expenseChart: expenseData,
+      totalInvoices: totalInvoicesCount,
       totalRevenue: totalRevenue._sum.grand_total || 0,
       totalExpense: totalExpense._sum.amount || 0,
       netProfit: (Number(totalRevenue._sum.grand_total || 0) - Number(totalExpense._sum.amount || 0))

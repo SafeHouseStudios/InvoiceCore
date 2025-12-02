@@ -13,19 +13,19 @@ import {
 } from "@/components/ui/dialog";
 import { 
   Save, Loader2, Building2, Wallet, Upload, Download, AlertTriangle, 
-  Users, Trash2, Plus, Star, Pencil, Mail
+  Users, Trash2, Plus, Star, Pencil, Mail, FileText
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [isBackupLoading, setIsBackupLoading] = useState(false);
-  const [isImporting, setIsImporting] = useState(false); // <--- FIXED: Added missing state
+  const [isImporting, setIsImporting] = useState(false);
 
-  // --- Profile State ---
+  // --- Profile State (Includes Branding) ---
   const [profile, setProfile] = useState({
     company_name: '', address: '', state_code: '', gstin: '', phone: '', email: '', currency: 'INR',
-    logo: '', signature: ''
+    logo: '', signature: '', stamp: ''
   });
 
   // --- Templates State ---
@@ -56,6 +56,8 @@ export default function SettingsPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [newUser, setNewUser] = useState({ email: '', password: '' });
   const [isAddingUser, setIsAddingUser] = useState(false);
+  const [isImportingInvoices, setIsImportingInvoices] = useState(false);
+  const [isImportingQuotes, setIsImportingQuotes] = useState(false);
 
   // --- INITIAL LOAD ---
   useEffect(() => {
@@ -98,8 +100,39 @@ export default function SettingsPage() {
     }
   };
 
+  const [docSettings, setDocSettings] = useState({
+    invoice_format: "INV/{FY}/{SEQ:3}",
+    quotation_format: "QTN/{FY}/{SEQ:3}",
+    invoice_label: "INVOICE",
+    quotation_label: "QUOTATION"
+  });
+  const [nextInvoiceSeq, setNextInvoiceSeq] = useState("");
+
+  const handleDocSettingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDocSettings({ ...docSettings, [e.target.name]: e.target.value });
+  };
+
+  const handleSaveDocSettings = async () => {
+    setLoading(true);
+    try {
+        await api.put('/settings/documents', docSettings);
+        alert("Document settings saved!");
+    } catch (e) { alert("Save failed"); } 
+    finally { setLoading(false); }
+  };
+
+  const handleUpdateSequence = async (type: 'INVOICE' | 'QUOTATION', val: string) => {
+    if (!val) return;
+    if (!confirm(`Are you sure you want to set the next ${type} number to ${val}? This affects the CURRENT fiscal year.`)) return;
+    
+    try {
+        await api.put('/settings/sequence', { type, next_number: val });
+        alert("Sequence updated!");
+    } catch (e) { alert("Failed to update sequence"); }
+  };
+
   // --- HANDLERS: Branding Upload ---
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'logo' | 'signature') => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'logo' | 'signature' | 'stamp') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -110,6 +143,7 @@ export default function SettingsPage() {
       const res = await api.post('/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
+      // Save relative path (e.g. /uploads/file.png)
       setProfile(prev => ({ ...prev, [field]: res.data.filePath }));
     } catch (err) {
       alert("Upload failed");
@@ -308,6 +342,28 @@ export default function SettingsPage() {
     }
   };
 
+  // Generic helper for imports
+  const handleGenericImport = async (e: React.ChangeEvent<HTMLInputElement>, endpoint: string, setter: any) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!confirm(`Import from ${file.name}?`)) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    setter(true);
+
+    try {
+        const res = await api.post(endpoint, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        alert(`Import Successful! Processed ${res.data.imported} records.`);
+    } catch (e) {
+        alert("Import Failed. Check CSV format.");
+    } finally {
+        setter(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 p-8 space-y-6">
       <div className="flex justify-between items-center">
@@ -324,6 +380,9 @@ export default function SettingsPage() {
           </TabsTrigger>
           <TabsTrigger value="branding" className="data-[state=active]:bg-slate-100">
              <Star className="w-4 h-4 mr-2" /> Branding
+          </TabsTrigger>
+          <TabsTrigger value="documents" className="data-[state=active]:bg-slate-100">
+             <FileText className="w-4 h-4 mr-2" /> Documents
           </TabsTrigger>
           <TabsTrigger value="bank" className="data-[state=active]:bg-slate-100">
              <Wallet className="w-4 h-4 mr-2" /> Bank Accounts
@@ -370,7 +429,8 @@ export default function SettingsPage() {
               <CardDescription>Upload assets to professionalize your documents.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-8">
-              {/* Logo */}
+              
+              {/* 1. Logo Section */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                 <div>
                     <h3 className="font-medium text-sm mb-1">Company Logo</h3>
@@ -379,35 +439,129 @@ export default function SettingsPage() {
                 </div>
                 <div className="border border-dashed rounded-lg h-32 flex items-center justify-center bg-slate-50 relative overflow-hidden">
                     {profile.logo ? (
-                        <img src={`http://localhost:5000${profile.logo}`} alt="Logo Preview" className="max-h-full object-contain" />
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={profile.logo} alt="Logo Preview" className="max-h-full object-contain" />
                     ) : (
                         <span className="text-xs text-slate-400">No Logo</span>
                     )}
                 </div>
               </div>
-              {/* Signature */}
+
+              {/* 2. Signature Section */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center border-t pt-6">
                 <div>
-                    <h3 className="font-medium text-sm mb-1">Authorised Signatory / Stamp</h3>
-                    <p className="text-xs text-slate-500 mb-3">Appears at the bottom-right. Recommended: 200x100px Transparent PNG.</p>
+                    <h3 className="font-medium text-sm mb-1">Authorised Signature</h3>
+                    <p className="text-xs text-slate-500 mb-3">Appears at the bottom-right. Transparent PNG recommended.</p>
                     <Input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, 'signature')} />
                 </div>
                 <div className="border border-dashed rounded-lg h-32 flex items-center justify-center bg-slate-50 relative overflow-hidden">
                     {profile.signature ? (
-                        <img src={`http://localhost:5000${profile.signature}`} alt="Sign Preview" className="max-h-full object-contain" />
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={profile.signature} alt="Sign Preview" className="max-h-full object-contain" />
                     ) : (
                         <span className="text-xs text-slate-400">No Signature</span>
                     )}
                 </div>
               </div>
+
+              {/* 3. Stamp Section */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center border-t pt-6">
+                <div>
+                    <h3 className="font-medium text-sm mb-1">Official Company Stamp</h3>
+                    <p className="text-xs text-slate-500 mb-3">Appears alongside signature. Circular PNG recommended.</p>
+                    <Input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, 'stamp')} />
+                </div>
+                <div className="border border-dashed rounded-lg h-32 flex items-center justify-center bg-slate-50 relative overflow-hidden">
+                    {profile.stamp ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={profile.stamp} alt="Stamp Preview" className="max-h-full object-contain" />
+                    ) : (
+                        <span className="text-xs text-slate-400">No Stamp</span>
+                    )}
+                </div>
+              </div>
+
               <div className="flex justify-end pt-4">
                  <Button onClick={handleSave} disabled={loading}>{loading ? "Saving..." : "Save Branding"}</Button>
               </div>
+
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* --- TAB 3: BANK ACCOUNTS --- */}
+        {/* --- TAB 3: DOCUMENTS --- */}
+        <TabsContent value="documents">
+          <Card>
+            <CardHeader>
+              <CardTitle>Document Numbering & Labels</CardTitle>
+              <CardDescription>Configure how your invoice and quotation numbers are generated.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-8">
+              
+              {/* HELP BOX */}
+              <div className="bg-blue-50 p-4 rounded-md border border-blue-100 text-sm text-blue-800">
+                <strong>Format Cheat Sheet:</strong>
+                <ul className="list-disc list-inside mt-2 space-y-1 text-xs">
+                    <li><code>{`{FY}`}</code> : Fiscal Year (e.g. "24-25")</li>
+                    <li><code>{`{YYYY}`}</code> : Current Year (e.g. "2025")</li>
+                    <li><code>{`{MM}`}</code> : Current Month (e.g. "12")</li>
+                    <li><code>{`{SEQ:3}`}</code> : Sequence Counter (e.g. "001"). Change 3 to any number for padding.</li>
+                </ul>
+              </div>
+
+              {/* INVOICE SETTINGS */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border rounded-lg bg-slate-50/50">
+                <div className="space-y-4">
+                    <h3 className="font-semibold flex items-center">Invoices</h3>
+                    <div className="space-y-2">
+                        <Label>Number Format</Label>
+                        <Input name="invoice_format" value={docSettings.invoice_format} onChange={handleDocSettingChange} placeholder="INV/{FY}/{SEQ:3}" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Document Label (PDF Title)</Label>
+                        <Input name="invoice_label" value={docSettings.invoice_label} onChange={handleDocSettingChange} placeholder="INVOICE / TAX INVOICE" />
+                    </div>
+                </div>
+                <div className="space-y-4 border-l pl-6">
+                    <h3 className="font-semibold text-slate-500">Sequence Control</h3>
+                    <div className="space-y-2">
+                        <Label>Set Next Number (Current FY)</Label>
+                        <div className="flex gap-2">
+                            <Input 
+                                placeholder="e.g. 101" 
+                                onChange={(e) => setNextInvoiceSeq(e.target.value)} 
+                            />
+                            <Button variant="secondary" onClick={() => handleUpdateSequence('INVOICE', nextInvoiceSeq)}>Update</Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Only use if you need to jump sequences.</p>
+                    </div>
+                </div>
+              </div>
+
+              {/* QUOTATION SETTINGS */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border rounded-lg bg-slate-50/50">
+                <div className="space-y-4">
+                    <h3 className="font-semibold flex items-center">Quotations</h3>
+                    <div className="space-y-2">
+                        <Label>Number Format</Label>
+                        <Input name="quotation_format" value={docSettings.quotation_format} onChange={handleDocSettingChange} placeholder="QTN/{FY}/{SEQ:3}" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Document Label</Label>
+                        <Input name="quotation_label" value={docSettings.quotation_label} onChange={handleDocSettingChange} placeholder="QUOTATION / ESTIMATE" />
+                    </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                 <Button onClick={handleSaveDocSettings} disabled={loading}>{loading ? "Saving..." : "Save Configuration"}</Button>
+              </div>
+
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* --- TAB 4: BANK ACCOUNTS --- */}
         <TabsContent value="bank">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -461,7 +615,7 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* --- TAB 4: EMAIL CONFIG & TEMPLATES --- */}
+        {/* --- TAB 5: EMAIL CONFIG & TEMPLATES --- */}
         <TabsContent value="email">
           <div className="grid grid-cols-1 gap-6">
             <Card>
@@ -501,7 +655,7 @@ export default function SettingsPage() {
           </div>
         </TabsContent>
 
-        {/* --- TAB 5: TEAM --- */}
+        {/* --- TAB 6: TEAM --- */}
         <TabsContent value="team">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
@@ -524,7 +678,7 @@ export default function SettingsPage() {
           </div>
         </TabsContent>
 
-        {/* --- TAB 6: BACKUP & IMPORT --- */}
+        {/* --- TAB 7: BACKUP & IMPORT --- */}
         <TabsContent value="backup">
           <Card>
             <CardHeader><CardTitle>Data Management</CardTitle></CardHeader>
@@ -569,7 +723,46 @@ export default function SettingsPage() {
                         )}
                     </div>
                 </div>
+                {/* Invoice Import */}
+              <div className="flex items-center justify-between p-4 border border-dashed rounded-lg bg-slate-50 mt-4">
+                  <div>
+                      <h4 className="font-medium text-sm">Import Invoices (Legacy)</h4>
+                      <p className="text-xs text-slate-500 mt-1">
+                          Req: <span className="font-mono bg-slate-200 px-1">invoice_number</span>, <span className="font-mono bg-slate-200 px-1">client_email</span>, <span className="font-mono bg-slate-200 px-1">amount</span>, <span className="font-mono bg-slate-200 px-1">date</span>, <span className="font-mono bg-slate-200 px-1">status</span>
+                      </p>
+                  </div>
+                  <div className="relative">
+                      {isImportingInvoices ? (
+                          <Button disabled variant="outline"><Loader2 className="w-4 h-4 animate-spin mr-2"/> Importing...</Button>
+                      ) : (
+                          <>
+                              <input type="file" accept=".csv" onChange={(e) => handleGenericImport(e, '/import/invoices', setIsImportingInvoices)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                              <Button variant="outline"><Upload className="w-4 h-4 mr-2" /> Select CSV</Button>
+                          </>
+                      )}
+                  </div>
               </div>
+
+              {/* Quotation Import */}
+              <div className="flex items-center justify-between p-4 border border-dashed rounded-lg bg-slate-50 mt-4">
+                  <div>
+                      <h4 className="font-medium text-sm">Import Quotations (Legacy)</h4>
+                      <p className="text-xs text-slate-500 mt-1">
+                          Req: <span className="font-mono bg-slate-200 px-1">quote_number</span>, <span className="font-mono bg-slate-200 px-1">client_email</span>, <span className="font-mono bg-slate-200 px-1">amount</span>, <span className="font-mono bg-slate-200 px-1">date</span>
+                      </p>
+                  </div>
+                  <div className="relative">
+                      {isImportingQuotes ? (
+                          <Button disabled variant="outline"><Loader2 className="w-4 h-4 animate-spin mr-2"/> Importing...</Button>
+                      ) : (
+                          <>
+                              <input type="file" accept=".csv" onChange={(e) => handleGenericImport(e, '/import/quotations', setIsImportingQuotes)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                              <Button variant="outline"><Upload className="w-4 h-4 mr-2" /> Select CSV</Button>
+                          </>
+                      )}
+                  </div>
+              </div>
+            </div>
 
             </CardContent>
           </Card>
