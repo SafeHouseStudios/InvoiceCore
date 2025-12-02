@@ -1,5 +1,3 @@
-// backend/prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -47,7 +45,7 @@ model BankAccount {
   
   // UPI/VPA (India specific)
   upi_id            String?
-
+  
   is_default        Boolean  @default(false)
   created_at        DateTime @default(now())
 
@@ -70,7 +68,7 @@ model User {
   two_factor_secret  String?
   two_factor_enabled Boolean  @default(false)
   backup_codes       Json?
-
+  
   created_at         DateTime @default(now())
 }
 
@@ -85,7 +83,7 @@ model Client {
   tax_id          String?
   
   // GST / Tax Logic Fields
-  state_code      Int?      
+  state_code      Int?
   country         String    @default("India")
   
   email           String?
@@ -159,15 +157,15 @@ model Quotation {
   
   issue_date        DateTime
   expiry_date       DateTime?
-  status            String   @default("DRAFT")
+  status            String   @default("DRAFT") // DRAFT, SENT, ACCEPTED, REJECTED
   
   // Data
-  line_items        Json     // This is your BOQ
+  line_items        Json     // BOQ / Services Offered
   
-  // NEW FIELDS REQUESTED
-  services_offered  String?  @db.Text // <--- NEW: Services Offered
-  contract_terms    String?  @db.Text // <--- Used for: Contract Tenure
-  remarks           String?  @db.Text
+  // --- NEW FIELDS FOR DATA ENTRY ---
+  services_offered  String?  @db.Text // Scope of Work / Services
+  contract_terms    String?  @db.Text // Contract Tenure / Terms
+  remarks           String?  @db.Text // Internal or External Notes
   
   subtotal          Decimal  @db.Decimal(15, 2)
   grand_total       Decimal  @db.Decimal(15, 2)
