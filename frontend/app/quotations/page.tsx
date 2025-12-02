@@ -1,4 +1,3 @@
-// frontend/app/quotations/page.tsx
 "use client";
 
 import React, { useEffect, useState } from 'react';
@@ -6,7 +5,9 @@ import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, FileText, Loader2, MoreHorizontal } from "lucide-react";
+import { 
+  Plus, FileText, Loader2, MoreHorizontal, Send, CheckCircle, XCircle, Eye, Pencil
+} from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { 
@@ -40,28 +41,33 @@ export default function QuotationListPage() {
     fetchQuotes();
   }, []);
 
+  const handleStatusChange = async (id: number, status: string) => {
+      // Ideally add API call here to update status
+      alert(`Mark as ${status} (Not implemented yet)`);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 p-8 space-y-6">
+    <div className="p-6 space-y-6">
       
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Quotations</h1>
-          <p className="text-slate-500">Manage estimates and proposals</p>
+          <h1 className="text-3xl font-bold text-foreground">Quotations</h1>
+          <p className="text-muted-foreground">Manage estimates and proposals</p>
         </div>
         <Link href="/quotations/new">
-          <Button className="bg-slate-900 hover:bg-slate-800">
+          <Button className="bg-primary text-white shadow-lg shadow-primary/25 hover:bg-primary/90">
             <Plus className="w-4 h-4 mr-2" /> Create Quote
           </Button>
         </Link>
       </div>
 
-      <Card>
+      <Card className="shadow-horizon border-none bg-card">
         <CardHeader>
           <CardTitle>Recent Quotations</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="p-10 text-center text-slate-400 flex justify-center">
+            <div className="p-10 text-center text-muted-foreground flex justify-center">
                 <Loader2 className="animate-spin mr-2" /> Loading...
             </div>
           ) : (
@@ -79,35 +85,44 @@ export default function QuotationListPage() {
               <TableBody>
                 {quotes.length === 0 && (
                    <TableRow>
-                     <TableCell colSpan={6} className="text-center py-10 text-slate-500">
+                     <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
                         No quotations found.
                      </TableCell>
                    </TableRow>
                 )}
                 
                 {quotes.map((q) => (
-                  <TableRow key={q.id}>
-                    <TableCell className="font-medium font-mono text-slate-700">{q.quotation_number}</TableCell>
-                    <TableCell>{q.client?.company_name || "Unknown"}</TableCell>
+                  <TableRow key={q.id} className="group hover:bg-muted/30 transition-colors">
+                    <TableCell className="font-bold text-foreground font-mono">{q.quotation_number}</TableCell>
+                    <TableCell className="font-medium text-muted-foreground">{q.client?.company_name || "Unknown"}</TableCell>
                     <TableCell>{format(new Date(q.issue_date), "dd MMM yyyy")}</TableCell>
-                    <TableCell>
+                    <TableCell className="font-bold text-foreground">
                       {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(q.grand_total))}
                     </TableCell>
                     <TableCell>
-                      <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide border
+                        ${q.status === 'ACCEPTED' ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800' : ''}
+                        ${q.status === 'SENT' ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800' : ''}
+                        ${q.status === 'DRAFT' ? 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' : ''}
+                      `}>
                         {q.status}
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
-                       <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="icon"><MoreHorizontal className="w-4 h-4" /></Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem>Convert to Invoice</DropdownMenuItem>
-                            <DropdownMenuItem>Download PDF</DropdownMenuItem>
-                          </DropdownMenuContent>
-                       </DropdownMenu>
+                       <div className="flex justify-end items-center gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-primary"><Eye className="w-4 h-4"/></Button>
+                          <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="w-4 h-4" /></Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem><Pencil className="w-4 h-4 mr-2"/> Edit Quote</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusChange(q.id, 'SENT')}><Send className="w-4 h-4 mr-2 text-blue-500"/> Mark Sent</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusChange(q.id, 'ACCEPTED')}><CheckCircle className="w-4 h-4 mr-2 text-green-500"/> Convert to Invoice</DropdownMenuItem>
+                                <DropdownMenuItem className="text-red-500"><XCircle className="w-4 h-4 mr-2"/> Delete</DropdownMenuItem>
+                              </DropdownMenuContent>
+                          </DropdownMenu>
+                       </div>
                     </TableCell>
                   </TableRow>
                 ))}

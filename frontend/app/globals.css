@@ -4,35 +4,73 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
-    
-    --card: 0 0% 100%;
+    /* --- HORIZON LIGHT THEME (High Contrast) --- */
+    --background: 210 33% 96%;  /* #F4F7FE - Light Cool Grey */
+    --foreground: 222 47% 11%;  /* #1B2559 - Deep Navy Text */
+
+    --card: 0 0% 100%;          /* Pure White */
     --card-foreground: 222 47% 11%;
-    
+
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
-    
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215 16% 47%;
-    
+
+    /* Brand Color: Horizon Purple (Default) */
+    --primary: 251 100% 55%;    /* #4318FF */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 8% 46%; /* #A3AED0 - Readable Grey */
+
     --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    
+    --accent-foreground: 222 47% 11%;
+
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221 83% 53%;
-    
-    --radius: 0.75rem;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;      /* #E9EDF7 */
+    --input: 220 13% 91%;
+    --ring: 251 100% 55%;
+
+    --radius: 1rem; /* Modern rounded corners */
+  }
+
+  /* --- HORIZON DARK THEME (Deep Navy Fix) --- */
+  .dark {
+    /* Background: Deepest Navy (Almost Black) */
+    --background: 225 50% 8%;   /* #060B1E */
+    --foreground: 0 0% 100%;    /* Pure White Text */
+
+    /* Card: Rich Navy Blue */
+    --card: 227 60% 17%;        /* #111C44 */
+    --card-foreground: 0 0% 100%;
+
+    --popover: 227 60% 17%;     /* Matches Card */
+    --popover-foreground: 0 0% 100%;
+
+    /* Primary: Slightly brighter for visibility */
+    --primary: 251 100% 65%;    /* #7551FF */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 226 58% 25%;   /* Button backgrounds */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 226 58% 25%;
+    /* CRITICAL: Brighter Grey for Secondary Text so it doesn't disappear */
+    --muted-foreground: 223 25% 80%; /* #A3AED0 */
+
+    --accent: 226 58% 25%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders: Visible but subtle Navy */
+    --border: 226 45% 30%;      /* #2B3674 */
+    --input: 226 45% 30%;
+    --ring: 251 100% 65%;
   }
 }
 
@@ -40,23 +78,141 @@
   * {
     @apply border-border;
   }
+  
   body {
-    @apply bg-background text-foreground;
-    /* GLASSMORPHISM BASE: Soft Mesh Gradient */
-    background-image: 
-      radial-gradient(at 0% 0%, hsla(222,80%,95%,1) 0, transparent 50%), 
-      radial-gradient(at 100% 0%, hsla(210,80%,98%,1) 0, transparent 50%), 
-      radial-gradient(at 100% 100%, hsla(222,80%,95%,1) 0, transparent 50%);
-    background-attachment: fixed; /* Keeps gradient in place while scrolling */
+    @apply bg-background text-foreground transition-colors duration-500 ease-in-out relative;
+    /* Important: Allows the DynamicBackground component to show through */
+    background-color: hsl(var(--background)); 
+    overflow-x: hidden;
+  }
+
+  /* CSS-Based Animated Background (Fallback/Enhancement)
+     If you use the <DynamicBackground /> component, these add extra depth.
+  */
+  body::before,
+  body::after {
+    content: '';
+    position: fixed;
+    width: 40vw;
+    height: 40vw;
+    border-radius: 50%;
+    filter: blur(120px);
+    z-index: -1;
+    animation: float 20s infinite alternate ease-in-out;
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  /* Light Mode Orbs */
+  body::before {
+    top: -10%;
+    left: -10%;
+    background: radial-gradient(circle, hsla(var(--primary)), transparent 70%);
+  }
+  body::after {
+    bottom: -10%;
+    right: -10%;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.3), transparent 70%);
+    animation-delay: -10s;
+  }
+
+  /* Dark Mode Orbs: Adjusted opacity */
+  .dark body::before {
+    opacity: 0.2;
+  }
+  .dark body::after {
+    opacity: 0.15;
   }
 }
 
-/* Utility class for Glass Cards */
+@layer components {
+  /* Fix Dropdowns/Popovers Transparency & Borders */
+  .bg-popover {
+    @apply bg-white/95 dark:bg-[#111C44]/95 backdrop-blur-md border border-border shadow-2xl;
+  }
+  
+  /* Fix Date Picker Container */
+  .rdp {
+    @apply bg-card rounded-xl shadow-xl p-4 border border-border m-0;
+  }
+  .rdp-day_selected {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground;
+  }
+  
+  /* Configurator Active Ring */
+  .config-option-active {
+    @apply ring-2 ring-primary ring-offset-2 ring-offset-background;
+  }
+}
+
 @layer utilities {
+  /* --- GLASSMORPHISM --- */
   .glass {
-    @apply bg-white/70 backdrop-blur-xl border border-white/20 shadow-xl shadow-slate-200/40;
+    /* Lighter background + Stronger Blur + Thin border */
+    @apply bg-white/60 dark:bg-[#111C44]/60 backdrop-blur-xl border border-white/40 dark:border-white/5 shadow-lg;
   }
-  .glass-panel {
-    @apply bg-white/60 backdrop-blur-md border-r border-white/30;
+  
+  /* Solid fallback */
+  .solid-card {
+    @apply bg-card border border-border shadow-sm;
   }
+
+  /* Custom Shadows */
+  .shadow-horizon {
+    box-shadow: 0px 18px 40px rgba(112, 144, 176, 0.12);
+  }
+  .dark .shadow-horizon {
+    box-shadow: none; /* Flat depth for dark mode */
+  }
+
+  /* Animation Keyframes */
+  @keyframes float {
+    0% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(5%, 10%) scale(1.1); }
+    100% { transform: translate(-5%, 5%) scale(1); }
+  }
+  
+  @keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .animate-spin-slow {
+    animation: spin-slow 8s linear infinite;
+  }
+
+  .animate-float {
+    animation-name: float;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+  }
+
+  /* --- SCROLLBAR STYLING --- */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent; 
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 dark:bg-slate-700 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-400 dark:bg-slate-600;
+  }
+
+  /* --- SAFETY NET: Force hardcoded slate classes to behave in Dark Mode --- */
+  .dark .text-slate-900 { color: hsl(var(--foreground)) !important; }
+  .dark .text-slate-800 { color: hsl(var(--foreground)) !important; }
+  .dark .text-slate-700 { color: hsl(var(--muted-foreground)) !important; }
+  .dark .text-slate-600 { color: hsl(var(--muted-foreground)) !important; }
+  .dark .text-slate-500 { color: hsl(var(--muted-foreground)) !important; }
+  
+  .dark .bg-white { background-color: hsl(var(--card)) !important; }
+  .dark .bg-slate-50 { background-color: hsl(var(--background)) !important; }
+  .dark .bg-slate-100 { background-color: hsl(var(--border)) !important; }
+  
+  .dark .border-slate-200 { border-color: hsl(var(--border)) !important; }
+  .dark .border-slate-300 { border-color: hsl(var(--border)) !important; }
 }

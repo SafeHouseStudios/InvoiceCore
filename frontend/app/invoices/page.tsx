@@ -8,9 +8,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { 
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { Plus, Printer, MoreHorizontal, CheckCircle, Send, FileEdit, Loader2, Mail } from "lucide-react";
+import { 
+  Plus, MoreHorizontal, CheckCircle, Send, FileEdit, 
+  Loader2, Mail, Download, Pencil, Eye
+} from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
+import { useRouter } from 'next/navigation';
 
 interface Invoice {
   id: number;
@@ -25,10 +29,10 @@ interface Invoice {
 }
 
 export default function InvoiceListPage() {
+  const router = useRouter();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [downloadingId, setDownloadingId] = useState<number | null>(null);
-  const [sendingId, setSendingId] = useState<number | null>(null);
+  const [actionId, setActionId] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchInvoices = async () => {
@@ -52,13 +56,12 @@ export default function InvoiceListPage() {
       await api.patch(`/invoices/${id}/status`, { status: newStatus });
     } catch (e) {
       alert("Failed to update status");
-      window.location.reload();
     }
   };
 
   const handleDownloadPdf = async (id: number, invoiceNumber: string) => {
     try {
-      setDownloadingId(id);
+      setActionId(id);
       const response = await api.get(`/invoices/${id}/pdf`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
@@ -69,54 +72,34 @@ export default function InvoiceListPage() {
       link.click();
       link.remove();
     } catch (e) {
-      console.error(e);
       alert("Failed to download PDF");
     } finally {
-      setDownloadingId(null);
-    }
-  };
-
-  // --- NEW: Send Email Handler ---
-  const handleSendEmail = async (invoice: Invoice) => {
-    const clientEmail = invoice.client.email || "";
-    const emailToUse = prompt("Send invoice to:", clientEmail);
-    
-    if (!emailToUse) return;
-
-    setSendingId(invoice.id);
-    try {
-      await api.post(`/mail/invoice/${invoice.id}`, { email: emailToUse });
-      alert("Email sent successfully!");
-      handleStatusChange(invoice.id, 'SENT'); // Auto-update status
-    } catch (e: any) {
-      alert("Failed to send email: " + (e.response?.data?.error || e.message));
-    } finally {
-      setSendingId(null);
+      setActionId(null);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-8 space-y-6">
+    <div className="p-6 space-y-6">
       
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Invoices</h1>
-          <p className="text-slate-500">Manage your billing history</p>
+          <h1 className="text-3xl font-bold text-foreground">Invoices</h1>
+          <p className="text-muted-foreground">Manage your billing history</p>
         </div>
         <Link href="/invoices/new">
-          <Button className="bg-slate-900 hover:bg-slate-800">
+          <Button className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/25">
             <Plus className="w-4 h-4 mr-2" /> Create New
           </Button>
         </Link>
       </div>
 
-      <Card>
+      <Card className="shadow-horizon border-none bg-card">
         <CardHeader>
           <CardTitle>Recent Invoices</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="p-10 text-center text-slate-400 flex justify-center">
+            <div className="p-10 text-center text-muted-foreground flex justify-center">
                 <Loader2 className="animate-spin mr-2" /> Loading records...
             </div>
           ) : (
@@ -133,58 +116,72 @@ export default function InvoiceListPage() {
               </TableHeader>
               <TableBody>
                 {invoices.length === 0 && (
-                   <TableRow><TableCell colSpan={6} className="text-center py-10 text-slate-500">No invoices found.</TableCell></TableRow>
+                   <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">No invoices found.</TableCell></TableRow>
                 )}
                 
                 {invoices.map((inv) => (
-                  <TableRow key={inv.id}>
-                    <TableCell className="font-medium font-mono text-slate-700">{inv.invoice_number}</TableCell>
-                    <TableCell>{inv.client?.company_name || "Unknown"}</TableCell>
+                  <TableRow key={inv.id} className="group hover:bg-muted/50 transition-colors">
+                    <TableCell className="font-bold text-foreground font-mono">{inv.invoice_number}</TableCell>
+                    <TableCell className="text-muted-foreground font-medium">{inv.client?.company_name}</TableCell>
                     <TableCell>{format(new Date(inv.issue_date), "dd MMM yyyy")}</TableCell>
-                    <TableCell>{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(inv.grand_total))}</TableCell>
+                    <TableCell className="font-bold text-foreground">
+                        {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(inv.grand_total))}
+                    </TableCell>
                     <TableCell>
-                      <span className={`px-2 py-1 rounded-full text-xs font-semibold
-                        ${inv.status === 'PAID' ? 'bg-green-100 text-green-700' : ''}
-                        ${inv.status === 'SENT' ? 'bg-blue-100 text-blue-700' : ''}
-                        ${inv.status === 'DRAFT' ? 'bg-gray-100 text-gray-700' : ''}
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide border
+                        ${inv.status === 'PAID' ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800' : ''}
+                        ${inv.status === 'SENT' ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800' : ''}
+                        ${inv.status === 'DRAFT' ? 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' : ''}
                       `}>
                         {inv.status}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right flex justify-end gap-2">
-                       
-                       {/* Send Email Button */}
-                       <Button 
-                         variant="ghost" 
-                         size="icon" 
-                         title="Send Email"
-                         onClick={() => handleSendEmail(inv)}
-                         disabled={sendingId === inv.id}
-                       >
-                         {sendingId === inv.id ? <Loader2 className="w-4 h-4 animate-spin text-blue-600" /> : <Mail className="w-4 h-4 text-slate-500 hover:text-blue-600" />}
-                       </Button>
+                    
+                    {/* --- ACTION BUTTONS --- */}
+                    <TableCell className="text-right">
+                       <div className="flex justify-end items-center gap-2">
+                           
+                           {/* 1. Download PDF */}
+                           <Button 
+                             variant="ghost" size="icon" 
+                             className="h-8 w-8 hover:text-primary hover:bg-primary/10 rounded-full"
+                             title="Download PDF"
+                             onClick={() => handleDownloadPdf(inv.id, inv.invoice_number)}
+                             disabled={actionId === inv.id}
+                           >
+                             {actionId === inv.id ? <Loader2 className="w-4 h-4 animate-spin"/> : <Download className="w-4 h-4" />}
+                           </Button>
 
-                       <Button 
-                         variant="ghost" 
-                         size="icon" 
-                         title="Download PDF"
-                         onClick={() => handleDownloadPdf(inv.id, inv.invoice_number)}
-                         disabled={downloadingId === inv.id}
-                       >
-                         {downloadingId === inv.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4 text-slate-500 hover:text-slate-900" />}
-                       </Button>
+                           {/* 2. Edit Invoice */}
+                           <Button 
+                             variant="ghost" size="icon"
+                             className="h-8 w-8 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full"
+                             title="Edit Invoice"
+                             onClick={() => router.push(`/invoices/${inv.id}`)} // Redirect to Edit Page
+                           >
+                             <Pencil className="w-4 h-4" />
+                           </Button>
 
-                       <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon"><MoreHorizontal className="w-4 h-4 text-slate-500" /></Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'PAID')}><CheckCircle className="w-4 h-4 mr-2 text-green-600" /> Mark Paid</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'SENT')}><Send className="w-4 h-4 mr-2 text-blue-600" /> Mark Sent</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'DRAFT')}><FileEdit className="w-4 h-4 mr-2 text-gray-500" /> Mark Draft</DropdownMenuItem>
-                          </DropdownMenuContent>
-                       </DropdownMenu>
-
+                           {/* 3. More Actions Dropdown */}
+                           <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted rounded-full">
+                                    <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'PAID')}>
+                                    <CheckCircle className="w-4 h-4 mr-2 text-green-600" /> Mark Paid
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'SENT')}>
+                                    <Send className="w-4 h-4 mr-2 text-blue-600" /> Mark Sent
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'DRAFT')}>
+                                    <FileEdit className="w-4 h-4 mr-2 text-slate-500" /> Mark Draft
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                           </DropdownMenu>
+                       </div>
                     </TableCell>
                   </TableRow>
                 ))}

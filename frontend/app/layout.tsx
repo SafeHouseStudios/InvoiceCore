@@ -3,7 +3,11 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
-import { Sidebar } from "@/components/Sidebar"; // Import the component we just made
+import { Sidebar } from "@/components/Sidebar";
+import { TopNavbar } from "@/components/TopNavbar";
+import { ThemeProvider } from "@/components/theme-provider";
+import { Configurator } from "@/components/Configurator";
+import { DynamicBackground } from "@/components/Dynamicbackground"; // <--- IMPORT
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -14,17 +18,24 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className={cn(inter.className, "min-h-screen flex selection:bg-blue-100")}>
-        
-        {/* Use the new Sidebar component here */}
-        <Sidebar />
+    <html lang="en" suppressHydrationWarning>
+      <body className={cn(inter.className, "min-h-screen flex bg-background text-foreground antialiased overflow-hidden")}>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          
+          {/* 1. The Dynamic Background Layer */}
+          <DynamicBackground />
 
-        {/* MAIN CONTENT AREA */}
-        <main className="flex-1 overflow-y-auto max-h-screen bg-transparent relative">
-            {children}
-        </main>
-
+          <Sidebar />
+          
+          <div className="flex-1 flex flex-col h-screen overflow-hidden relative z-10">
+            <TopNavbar />
+            <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-20 scroll-smooth">
+                {children}
+            </main>
+            <Configurator />
+          </div>
+          
+        </ThemeProvider>
       </body>
     </html>
   );
