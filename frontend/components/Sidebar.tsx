@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useConfigurator } from "@/hooks/use-configurator";
 import { 
-  LayoutDashboard, FileText, Users, Settings, Wallet, 
+  LayoutDashboard, FileText, Users, Settings, Wallet, Activity, 
   ChevronLeft, ChevronRight, Search, BookOpen, LogOut, User, MoreVertical, Shield 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,7 @@ export function Sidebar({ className, hideLogo = false, forceExpand = false }: Si
     { href: "/clients", label: "Clients", icon: Users },
     { href: "/expenses", label: "Expenses", icon: Wallet },
     { href: "/ledger", label: "Ledger", icon: BookOpen },
+    { href: "/activity", label: "Activity Log", icon: Activity },
     { href: "/settings", label: "Settings", icon: Settings },
   ];
 

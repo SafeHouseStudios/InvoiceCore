@@ -23,6 +23,8 @@ import userRoutes from './routes/userRoutes';
 import ledgerRoutes from './routes/ledgerRoutes';
 import profileRoutes from './routes/profileRoutes';
 import notificationRoutes from './routes/notificationRoutes';
+import activityRoutes from './routes/activityRoutes';
+import { ActivityService } from './services/ActivityService';
 
 import { authenticateToken } from './middleware/authMiddleware';
 
@@ -65,8 +67,19 @@ app.use('/api/users', userRoutes);
 app.use('/api/ledger', ledgerRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/activity', activityRoutes);
 
 // 5. Start Server
 app.listen(PORT, () => {
   console.log(`[InvoiceCore] Server running on port ${PORT}`);
+
+  // --- LOG ROTATION TASK ---
+  // Run immediately on startup
+  ActivityService.pruneLogs(7);
+
+  // Then run every 24 hours (86400000 ms)
+  setInterval(() => {
+    console.log("[Cron] Running daily log rotation...");
+    ActivityService.pruneLogs(7);
+  }, 86400000);
 });

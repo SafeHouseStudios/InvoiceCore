@@ -1,101 +1,62 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import sanitizeHtml from 'sanitize-html';
+import { ActivityService } from '../services/ActivityService';
+import { AuthRequest } from '../middleware/authMiddleware';
 
 const router = Router();
 const prisma = new PrismaClient();
 
-// ==============================
-// 1. COMPANY PROFILE
-// ==============================
-
-// GET: Fetch Company Profile
+// --- COMPANY PROFILE ---
 router.get('/company', async (req, res) => {
-  try {
-    const setting = await prisma.systemSetting.findUnique({
-      where: { key: 'COMPANY_PROFILE' }
-    });
-    res.json(setting?.json_value || {});
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch settings" });
-  }
+  const setting = await prisma.systemSetting.findUnique({ where: { key: 'COMPANY_PROFILE' } });
+  res.json(setting?.json_value || {});
 });
 
-// PUT: Update Company Profile (Critical for Tax Engine)
-router.put('/company', async (req, res) => {
+router.put('/company', async (req: Request, res: Response) => {
   try {
-    // Add 'cin' to the destructuring list
-    const { 
-      company_name, address, state_code, gstin, cin, phone, email, // <--- Added 'cin'
-      bank_details, logo, signature, stamp 
-    } = req.body;
+    const { company_name, address, state_code, gstin, cin, phone, email, bank_details, logo, signature, stamp } = req.body;
 
     await prisma.systemSetting.upsert({
       where: { key: 'COMPANY_PROFILE' },
       update: {
         value: company_name,
-        json_value: {
-          company_name, address, state_code: Number(state_code), gstin, cin, phone, email, // <--- Added 'cin'
-          bank_details, logo, signature, stamp
-        }
+        json_value: { company_name, address, state_code: Number(state_code), gstin, cin, phone, email, bank_details, logo, signature, stamp }
       },
       create: {
-        key: 'COMPANY_PROFILE',
-        value: company_name,
-        is_locked: true,
-        json_value: {
-          company_name, address, state_code: Number(state_code), gstin, cin, phone, email, // <--- Added 'cin'
-          bank_details, logo, signature, stamp
-        }
+        key: 'COMPANY_PROFILE', value: company_name, is_locked: true,
+        json_value: { company_name, address, state_code: Number(state_code), gstin, cin, phone, email, bank_details, logo, signature, stamp }
       }
     });
 
+    const authReq = req as AuthRequest;
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    await ActivityService.log(authReq.user.id, "UPDATE_SETTINGS", "Updated Company Profile", "SETTINGS", "COMPANY", ip as string);
+
     res.json({ success: true });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ error: "Failed to update settings" });
   }
 });
 
-// ==============================
-// 2. DOCUMENT SETTINGS (Formats)
-// ==============================
-
+// --- DOCUMENT SETTINGS ---
 router.get('/documents', async (req, res) => {
-  try {
-    const setting = await prisma.systemSetting.findUnique({
-      where: { key: 'DOCUMENT_SETTINGS' }
-    });
-    
-    // Default Formats
-    const defaults = {
-      invoice_format: "INV/{FY}/{SEQ:3}",
-      quotation_format: "QTN/{FY}/{SEQ:3}",
-      invoice_label: "INVOICE",
-      quotation_label: "QUOTATION"
-    };
-
-    res.json(setting?.json_value || defaults);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch document settings" });
-  }
+  const setting = await prisma.systemSetting.findUnique({ where: { key: 'DOCUMENT_SETTINGS' } });
+  res.json(setting?.json_value || { invoice_format: "INV/{FY}/{SEQ:3}", quotation_format: "QTN/{FY}/{SEQ:3}", invoice_label: "INVOICE", quotation_label: "QUOTATION" });
 });
 
-router.put('/documents', async (req, res) => {
+router.put('/documents', async (req: Request, res: Response) => {
   try {
     const { invoice_format, quotation_format, invoice_label, quotation_label } = req.body;
-
     await prisma.systemSetting.upsert({
       where: { key: 'DOCUMENT_SETTINGS' },
-      update: {
-        json_value: { invoice_format, quotation_format, invoice_label, quotation_label }
-      },
-      create: {
-        key: 'DOCUMENT_SETTINGS',
-        json_value: { invoice_format, quotation_format, invoice_label, quotation_label },
-        is_locked: false
-      }
+      update: { json_value: { invoice_format, quotation_format, invoice_label, quotation_label } },
+      create: { key: 'DOCUMENT_SETTINGS', json_value: { invoice_format, quotation_format, invoice_label, quotation_label }, is_locked: false }
     });
+    
+    const authReq = req as AuthRequest;
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    await ActivityService.log(authReq.user.id, "UPDATE_SETTINGS", "Updated Document Formats", "SETTINGS", "DOCS", ip as string);
 
     res.json({ success: true });
   } catch (error) {
@@ -103,25 +64,17 @@ router.put('/documents', async (req, res) => {
   }
 });
 
-// ==============================
-// 3. SEQUENCE MANAGEMENT
-// ==============================
-
-router.put('/sequence', async (req, res) => {
+// --- SEQUENCES ---
+router.put('/sequence', async (req: Request, res: Response) => {
   try {
-    const { type, next_number } = req.body; // type: 'INVOICE' | 'QUOTATION'
-    
-    if (!next_number || isNaN(Number(next_number))) {
-        return res.status(400).json({ error: "Invalid number" });
-    }
+    const { type, next_number } = req.body;
+    if (!next_number || isNaN(Number(next_number))) return res.status(400).json({ error: "Invalid number" });
 
-    // Determine current Fiscal Year
     const date = new Date();
     const month = date.getMonth() + 1;
     const year = date.getFullYear();
     const shortYear = year % 100;
     const fy = month >= 4 ? `${shortYear}-${shortYear + 1}` : `${shortYear - 1}-${shortYear}`;
-
     const newLastCount = Number(next_number) - 1; 
 
     if (type === 'INVOICE') {
@@ -138,31 +91,25 @@ router.put('/sequence', async (req, res) => {
         });
     }
 
-    res.json({ success: true, message: `${type} sequence updated for FY ${fy}` });
+    const authReq = req as AuthRequest;
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    await ActivityService.log(authReq.user.id, "UPDATE_SEQUENCE", `Updated ${type} sequence to ${next_number}`, "SETTINGS", "SEQ", ip as string);
 
+    res.json({ success: true });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ error: "Failed to update sequence" });
   }
 });
 
-// ==============================
-// 4. TEMPLATES (Sanitized HTML)
-// ==============================
-
-router.post('/template', async (req, res) => {
+// --- TEMPLATES ---
+router.post('/template', async (req: Request, res: Response) => {
   try {
     const { html, type } = req.body; 
     const key = type === 'QUOTATION' ? 'QUOTATION_TEMPLATE' : 'INVOICE_TEMPLATE';
-
     const cleanHtml = sanitizeHtml(html, {
       allowedTags: sanitizeHtml.defaults.allowedTags.concat([ 'img', 'style', 'h1', 'h2', 'h3', 'span', 'div', 'table', 'tbody', 'thead', 'tr', 'td', 'th', 'strong', 'b', 'i', 'u', 'br', 'p' ]),
-      allowedAttributes: {
-        '*': ['style', 'class', 'id', 'width', 'height', 'align', 'border', 'cellpadding', 'cellspacing'],
-        'img': ['src', 'alt']
-      },
-      allowedSchemes: ['http', 'https', 'data'], 
-      allowVulnerableTags: true 
+      allowedAttributes: { '*': ['style', 'class', 'id', 'width', 'height', 'align', 'border', 'cellpadding', 'cellspacing'], 'img': ['src', 'alt'] },
+      allowedSchemes: ['http', 'https', 'data'], allowVulnerableTags: true 
     });
 
     await prisma.systemSetting.upsert({
@@ -171,6 +118,10 @@ router.post('/template', async (req, res) => {
       create: { key, value: cleanHtml, is_locked: false }
     });
 
+    const authReq = req as AuthRequest;
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    await ActivityService.log(authReq.user.id, "UPDATE_TEMPLATE", `Updated ${type} Template`, "SETTINGS", "TEMPLATE", ip as string);
+
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: "Failed to save template" });
@@ -178,13 +129,9 @@ router.post('/template', async (req, res) => {
 });
 
 router.get('/template/:type', async (req, res) => {
-  try {
-    const key = req.params.type === 'QUOTATION' ? 'QUOTATION_TEMPLATE' : 'INVOICE_TEMPLATE';
-    const setting = await prisma.systemSetting.findUnique({ where: { key } });
-    res.json({ html: setting?.value || '' });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch template" });
-  }
+  const key = req.params.type === 'QUOTATION' ? 'QUOTATION_TEMPLATE' : 'INVOICE_TEMPLATE';
+  const setting = await prisma.systemSetting.findUnique({ where: { key } });
+  res.json({ html: setting?.value || '' });
 });
 
 export default router;

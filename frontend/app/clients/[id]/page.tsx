@@ -7,12 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Save, Loader2, ArrowLeft } from "lucide-react";
-import { useRouter, useParams } from 'next/navigation'; // <--- Params
+import { useRouter, useParams } from 'next/navigation'; 
 import Link from "next/link";
 
 export default function EditClientPage() {
   const router = useRouter();
-  const params = useParams(); // Get ID from URL
+  const params = useParams(); 
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<any>(null);
 
@@ -21,10 +21,10 @@ export default function EditClientPage() {
         try {
             const res = await api.get(`/clients/${params.id}`);
             const c = res.data;
-            // Flatten the structure for the form
             setFormData({
                 company_name: c.company_name,
                 tax_id: c.tax_id,
+                cin: c.cin || '', // <--- Load CIN from backend
                 state_code: c.state_code,
                 country: c.country,
                 email: c.email,
@@ -70,8 +70,23 @@ export default function EditClientPage() {
         <Card>
           <CardHeader><CardTitle>Company Details</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2"><Label>Company Name</Label><Input name="company_name" value={formData.company_name} onChange={handleChange} /></div>
-            <div className="space-y-2"><Label>GSTIN / Tax ID</Label><Input name="tax_id" value={formData.tax_id} onChange={handleChange} /></div>
+            <div className="space-y-2">
+                <Label>Company Name</Label>
+                <Input name="company_name" value={formData.company_name} onChange={handleChange} />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label>GSTIN / Tax ID</Label>
+                    <Input name="tax_id" value={formData.tax_id} onChange={handleChange} />
+                </div>
+                {/* NEW: CIN INPUT */}
+                <div className="space-y-2">
+                    <Label>CIN Number</Label>
+                    <Input name="cin" value={formData.cin} onChange={handleChange} placeholder="U12345MH..." />
+                </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Country</Label><Input name="country" value={formData.country} onChange={handleChange} /></div>
                 <div className="space-y-2"><Label>State Code</Label><Input name="state_code" type="number" value={formData.state_code} onChange={handleChange} /></div>
@@ -94,7 +109,10 @@ export default function EditClientPage() {
                    <Input name="address_zip" placeholder="Zip" value={formData.address_zip} onChange={handleChange} />
                  </div>
              </div>
-             <Button onClick={handleSubmit} disabled={loading} className="w-full mt-4">{loading ? <Loader2 className="animate-spin"/> : "Update Client"}</Button>
+             <Button onClick={handleSubmit} disabled={loading} className="w-full mt-4 bg-slate-900 hover:bg-slate-800">
+                {loading ? <Loader2 className="animate-spin mr-2"/> : <Save className="w-4 h-4 mr-2" />}
+                Update Client
+             </Button>
           </CardContent>
         </Card>
       </div>
