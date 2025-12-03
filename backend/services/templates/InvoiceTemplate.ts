@@ -123,8 +123,8 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any): string => 
     * { box-sizing: border-box; }
 
     body {
-        font-family: 'Calibri', Arial, sans-serif;
-        font-size: 10pt;
+        font-family: Calibri;
+        font-size: 12pt;
         color: var(--text);
         margin: 0;
         padding: 40px 50px;
@@ -144,6 +144,7 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any): string => 
         align-items: flex-start;
         gap: 25px;
         margin-bottom: 28px;
+        font-family: Helvetica;
     }
 
     .company-name {
@@ -151,6 +152,7 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any): string => 
         font-weight: 700;
         margin-bottom: 6px;
         color: #000;
+        font-family: Helvetica;
     }
 
     .company-name-divider {
@@ -182,7 +184,7 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any): string => 
     }
 
     .invoice-meta div { margin-right: 20px; }
-    .invoice-meta-label { font-weight: 600; color: #555; }
+    .invoice-meta-label { font-weight: 600; color: #000; }
 
     /* CLIENT CARD */
     #client-card {
@@ -208,6 +210,7 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any): string => 
         border-collapse: collapse;
         margin-bottom: 20px;
         font-size: 12px;
+        overflow: hidden;
     }
 
     #product-table thead th {
@@ -217,6 +220,7 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any): string => 
         border: 1px solid var(--border);
         font-weight: 600;
         text-align: center;
+        overflow: hidden;
     }
 
     #product-table tbody td {
@@ -230,7 +234,7 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any): string => 
     .col-hsn { width: 10%; text-align: center; }
     .col-qty { width: 10%; text-align: center; }
     .col-rate { width: 15%; text-align: center; }
-    .col-total { width: 15%; text-align: center; font-weight: 400; }
+    .col-total { width: 15%; text-align: center; }
     
     /* BOTTOM SECTION (Split Layout) */
     .bottom-split {
@@ -377,7 +381,7 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any): string => 
     }
     #footer-line {
         width: 100%;
-        height: 2px;
+        height: 1px;
         background: var(--accent);
         margin-bottom: 10px;
     }
