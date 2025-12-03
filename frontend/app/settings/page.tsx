@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import api from "@/lib/api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, Wallet, Upload, Mail, Users, FileText, Shield } from "lucide-react";
+import { Building2, Wallet, Upload, Mail, Users, FileText, Shield, Code } from "lucide-react";
 import { GeneralSettings } from '@/components/settings/GeneralSettings';
 import { BrandingSettings } from '@/components/settings/BrandingSettings';
 import { DocumentSettings } from '@/components/settings/DocumentSettings';
@@ -12,9 +12,12 @@ import { EmailSettings } from '@/components/settings/EmailSettings';
 import { TeamSettings } from '@/components/settings/TeamSettings';
 import { BackupSettings } from '@/components/settings/BackupSettings';
 import { TemplateSettings } from '@/components/settings/TemplateSettings';
-import { Code } from "lucide-react";
+import { useRole } from "@/hooks/use-role";
+import { useToast } from "@/components/ui/toast-context";
 
 export default function SettingsPage() {
+  const { isSudo } = useRole(); // True only if SUDO_ADMIN (Owner)
+  const { toast } = useToast();
   const [profile, setProfile] = useState<any>({});
   const [loading, setLoading] = useState(false);
 
@@ -25,26 +28,48 @@ export default function SettingsPage() {
     });
   }, []);
 
-  // Core Handlers
+  // Handle Inputs (Blocked for non-Sudo)
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    if (!isSudo) return; 
     setProfile({ ...profile, [e.target.name]: e.target.value });
   };
 
+  // Handle Save (Blocked for non-Sudo)
   const handleSaveProfile = async () => {
+    if (!isSudo) return toast("Access Denied: Only the Owner can edit settings.", "error");
+    
     setLoading(true);
-    try { await api.put('/settings/company', profile); alert("Profile updated!"); } 
-    catch (e) { alert("Failed."); } finally { setLoading(false); }
+    try { 
+      await api.put('/settings/company', profile); 
+      toast("Profile updated successfully!", "success"); 
+    } catch (e) { 
+      toast("Failed to update profile.", "error"); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
+  // Handle Uploads (Blocked for non-Sudo)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
+    if (!isSudo) return toast("Access Denied", "error");
+    
     const file = e.target.files?.[0];
     if (!file) return;
-    const formData = new FormData(); formData.append('file', file);
+    
+    const formData = new FormData(); 
+    formData.append('file', file);
+    
     try {
       const res = await api.post('/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       setProfile((prev: any) => ({ ...prev, [field]: res.data.filePath }));
-    } catch (err) { alert("Upload failed"); }
+      toast("File uploaded successfully", "success");
+    } catch (err) { 
+      toast("Upload failed", "error"); 
+    }
   };
+
+  // Read-Only Flag (True for Admins, False for Owner)
+  const isReadOnly = !isSudo;
 
   return (
     <div className="p-6 space-y-8 max-w-[1600px] mx-auto">
@@ -52,6 +77,11 @@ export default function SettingsPage() {
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-bold text-foreground">Settings</h1>
         <p className="text-muted-foreground">Manage company profile and system configurations.</p>
+        {isReadOnly && (
+          <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200 w-fit mt-2">
+            View Only Mode
+          </div>
+        )}
       </div>
 
       <Tabs defaultValue="general" className="w-full space-y-6">
@@ -65,24 +95,46 @@ export default function SettingsPage() {
             <TabItem value="bank" icon={<Wallet className="w-4 h-4"/>} label="Banking" />
             <TabItem value="email" icon={<Mail className="w-4 h-4"/>} label="Email" />
             <TabItem value="team" icon={<Users className="w-4 h-4"/>} label="Team" />
-            <TabItem value="backup" icon={<Shield className="w-4 h-4"/>} label="Data" />
+            {/* Backup is strictly hidden for non-Owners */}
+            {isSudo && <TabItem value="backup" icon={<Shield className="w-4 h-4"/>} label="Data" />}
           </TabsList>
         </div>
 
+        {/* CONTENT TABS (Passing disabled={isReadOnly} to all) */}
+        
         <TabsContent value="general">
-           <GeneralSettings profile={profile} handleChange={handleProfileChange} handleSave={handleSaveProfile} loading={loading} />
+           <GeneralSettings profile={profile} handleChange={handleProfileChange} handleSave={handleSaveProfile} loading={loading} disabled={isReadOnly} />
         </TabsContent>
+        
         <TabsContent value="branding">
-           <BrandingSettings profile={profile} handleFileUpload={handleFileUpload} handleSave={handleSaveProfile} loading={loading} />
+           <BrandingSettings profile={profile} handleFileUpload={handleFileUpload} handleSave={handleSaveProfile} loading={loading} disabled={isReadOnly} />
         </TabsContent>
+        
         <TabsContent value="templates" className="mt-0 h-full">
-          <TemplateSettings />
+          <TemplateSettings disabled={isReadOnly} />
         </TabsContent>
-        <TabsContent value="documents"><DocumentSettings /></TabsContent>
-        <TabsContent value="bank"><BankSettings /></TabsContent>
-        <TabsContent value="email"><EmailSettings /></TabsContent>
-        <TabsContent value="team"><TeamSettings /></TabsContent>
-        <TabsContent value="backup"><BackupSettings /></TabsContent>
+
+        <TabsContent value="documents">
+          <DocumentSettings disabled={isReadOnly} />
+        </TabsContent>
+
+        <TabsContent value="bank">
+          <BankSettings disabled={isReadOnly} />
+        </TabsContent>
+
+        <TabsContent value="email">
+          <EmailSettings disabled={isReadOnly} />
+        </TabsContent>
+
+        <TabsContent value="team">
+          <TeamSettings disabled={isReadOnly} />
+        </TabsContent>
+
+        {isSudo && (
+          <TabsContent value="backup">
+            <BackupSettings />
+          </TabsContent>
+        )}
 
       </Tabs>
     </div>
@@ -93,7 +145,7 @@ function TabItem({ value, icon, label }: any) {
     return (
         <TabsTrigger 
             value={value} 
-            className="data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-md px-4 py-2 rounded-lg transition-all flex items-center gap-2"
+            className="data-[state=active]:bg-primary data-[state=active]:text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all"
         >
             {icon} <span>{label}</span>
         </TabsTrigger>

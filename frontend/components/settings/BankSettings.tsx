@@ -10,8 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/toast-context";
 
-export function BankSettings() {
+interface BankSettingsProps {
+  disabled?: boolean;
+}
+
+export function BankSettings({ disabled }: BankSettingsProps) {
+  const { toast } = useToast();
   const [banks, setBanks] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -21,34 +27,41 @@ export function BankSettings() {
   const loadBanks = () => api.get('/banks').then(res => setBanks(res.data));
 
   const openDialog = (bank?: any) => {
+    if (disabled) return;
     setEditingId(bank ? bank.id : null);
     setForm(bank || { label: '', currency: 'USD', is_default: false });
     setIsOpen(true);
   };
 
   const saveBank = async () => {
-    if(!form.label || !form.account_number) return alert("Missing fields");
+    if(!form.label || !form.account_number) return toast("Missing fields", "warning");
     try {
         if(editingId) await api.put(`/banks/${editingId}`, form);
         else await api.post('/banks', form);
         setIsOpen(false); loadBanks();
-    } catch(e) { alert("Failed"); }
+        toast("Bank Account Saved", "success");
+    } catch(e) { toast("Failed to save bank", "error"); }
   };
 
   const deleteBank = async (id: number) => {
      if(!confirm("Delete?")) return;
-     try { await api.delete(`/banks/${id}`); loadBanks(); } catch(e) { alert("Failed"); }
+     try { await api.delete(`/banks/${id}`); loadBanks(); toast("Bank deleted", "success"); } 
+     catch(e) { toast("Failed", "error"); }
   };
 
   const setDefault = async (id: number) => {
-     try { await api.patch(`/banks/${id}/default`); loadBanks(); } catch(e) { alert("Failed"); }
+     if (disabled) return;
+     try { await api.patch(`/banks/${id}/default`); loadBanks(); toast("Default set", "success"); } 
+     catch(e) { toast("Failed", "error"); }
   };
 
   return (
     <Card className="shadow-horizon border-none bg-card">
         <CardHeader className="flex flex-row items-center justify-between">
             <div><CardTitle>Bank Accounts</CardTitle><CardDescription>Manage accounts for invoices.</CardDescription></div>
-            <Button onClick={() => openDialog()} className="bg-primary text-white"><Plus className="w-4 h-4 mr-2"/> Add Bank</Button>
+            {!disabled && (
+                <Button onClick={() => openDialog()} className="bg-primary text-white"><Plus className="w-4 h-4 mr-2"/> Add Bank</Button>
+            )}
         </CardHeader>
         <CardContent>
             <div className="grid gap-4 md:grid-cols-2">
@@ -60,18 +73,23 @@ export function BankSettings() {
                                 <p className="text-sm text-muted-foreground mt-1">{bank.bank_name}</p>
                                 <p className="text-xs text-muted-foreground font-mono">{bank.account_number} • {bank.currency}</p>
                             </div>
-                            <Button variant="ghost" size="icon" onClick={() => openDialog(bank)}><Pencil className="w-4 h-4"/></Button>
+                            {!disabled && (
+                                <Button variant="ghost" size="icon" onClick={() => openDialog(bank)}><Pencil className="w-4 h-4"/></Button>
+                            )}
                         </div>
-                        <div className="mt-4 pt-3 border-t flex justify-between items-center">
-                            {!bank.is_default && <Button variant="link" size="sm" className="p-0 h-auto text-primary" onClick={() => setDefault(bank.id)}>Make Default</Button>}
-                            <Button variant="ghost" size="sm" className="text-red-500 ml-auto" onClick={() => deleteBank(bank.id)}><Trash2 className="w-4 h-4 mr-1"/> Delete</Button>
-                        </div>
+                        
+                        {!disabled && (
+                            <div className="mt-4 pt-3 border-t flex justify-between items-center">
+                                {!bank.is_default && <Button variant="link" size="sm" className="p-0 h-auto text-primary" onClick={() => setDefault(bank.id)}>Make Default</Button>}
+                                <Button variant="ghost" size="sm" className="text-red-500 ml-auto" onClick={() => deleteBank(bank.id)}><Trash2 className="w-4 h-4 mr-1"/> Delete</Button>
+                            </div>
+                        )}
                     </div>
                 ))}
             </div>
         </CardContent>
         
-        {/* Dialog */}
+        {/* Dialog only renders if not disabled (though openDialog is guarded too) */}
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogContent className="sm:max-w-[600px]">
                 <DialogHeader><DialogTitle>{editingId ? "Edit" : "Add"} Account</DialogTitle></DialogHeader>

@@ -9,7 +9,11 @@ import { Button } from "@/components/ui/button";
 import { RotateCcw, Save, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/toast-context";
 
-export function DocumentSettings() {
+interface DocumentSettingsProps {
+  disabled?: boolean;
+}
+
+export function DocumentSettings({ disabled }: DocumentSettingsProps) {
   const { toast } = useToast();
   const [settings, setSettings] = useState<any>({});
   const [nextInvoiceSeq, setNextInvoiceSeq] = useState("");
@@ -37,28 +41,20 @@ export function DocumentSettings() {
   };
 
   const updateSeq = async (type: string, val: string) => {
-     if(!val || isNaN(Number(val))) {
-         return toast("Please enter a valid number", "warning");
-     }
-     
+     if(!val || isNaN(Number(val))) return toast("Please enter a valid number", "warning");
      try { 
          await api.put('/settings/sequence', { type, next_number: val }); 
          toast(`Success! Next ${type.toLowerCase()} will be ${val}`, "success");
          if (type === 'INVOICE') setNextInvoiceSeq("");
          else setNextQuoteSeq("");
-     } catch (e) { 
-         toast("Failed to update sequence", "error"); 
-     }
+     } catch (e) { toast("Failed to update sequence", "error"); }
   };
 
   const handleReset = async (type: string) => {
-      // Native confirm removed. Action triggers immediately.
       try {
           await api.put('/settings/sequence', { type, next_number: "1" });
           toast(`${type} sequence reset to 1.`, "success");
-      } catch (e) {
-          toast("Reset failed", "error");
-      }
+      } catch (e) { toast("Reset failed", "error"); }
   };
 
   return (
@@ -68,30 +64,38 @@ export function DocumentSettings() {
        <Card className="shadow-horizon border-none bg-card">
             <CardHeader>
                 <CardTitle>Invoice Configuration</CardTitle>
-                <CardDescription>Customize formats and numbering.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="space-y-2">
                     <Label>Number Format</Label>
-                    <Input name="invoice_format" value={settings.invoice_format || ''} onChange={handleChange} placeholder="INV/{FY}/{SEQ:3}" />
-                    <p className="text-xs text-muted-foreground">Variables: {'{FY}'}, {'{YYYY}'}, {'{MM}'}, {'{SEQ:3}'}</p>
+                    <Input 
+                        name="invoice_format" 
+                        value={settings.invoice_format || ''} 
+                        onChange={handleChange} 
+                        disabled={disabled} // <--- Disabled
+                    />
                 </div>
                 <div className="space-y-2">
                     <Label>Document Label</Label>
-                    <Input name="invoice_label" value={settings.invoice_label || ''} onChange={handleChange} />
+                    <Input 
+                        name="invoice_label" 
+                        value={settings.invoice_label || ''} 
+                        onChange={handleChange} 
+                        disabled={disabled} // <--- Disabled
+                    />
                 </div>
                 
-                <div className="pt-4 border-t space-y-3">
-                    <Label className="text-sm font-semibold">Sequence Management</Label>
-                    <div className="flex items-center gap-2">
-                        <Input value={nextInvoiceSeq} onChange={e => setNextInvoiceSeq(e.target.value)} placeholder="Set next # (e.g. 101)" className="flex-1" />
-                        <Button variant="secondary" onClick={() => updateSeq('INVOICE', nextInvoiceSeq)}>Set</Button>
-                        <Button variant="outline" size="icon" onClick={() => handleReset('INVOICE')} title="Reset to 1">
-                            <RotateCcw className="w-4 h-4 text-red-500" />
-                        </Button>
+                {/* Hide Sequence Controls if Disabled */}
+                {!disabled && (
+                    <div className="pt-4 border-t space-y-3">
+                        <Label className="text-sm font-semibold">Sequence Management</Label>
+                        <div className="flex items-center gap-2">
+                            <Input value={nextInvoiceSeq} onChange={e => setNextInvoiceSeq(e.target.value)} placeholder="Set next #" className="flex-1" />
+                            <Button variant="secondary" onClick={() => updateSeq('INVOICE', nextInvoiceSeq)}>Set</Button>
+                            <Button variant="outline" size="icon" onClick={() => handleReset('INVOICE')}><RotateCcw className="w-4 h-4 text-red-500" /></Button>
+                        </div>
                     </div>
-                    <p className="text-xs text-muted-foreground">Current Fiscal Year is auto-detected.</p>
-                </div>
+                )}
             </CardContent>
        </Card>
 
@@ -99,37 +103,48 @@ export function DocumentSettings() {
        <Card className="shadow-horizon border-none bg-card">
             <CardHeader>
                 <CardTitle>Quotation Configuration</CardTitle>
-                <CardDescription>Customize formats and numbering.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="space-y-2">
                     <Label>Number Format</Label>
-                    <Input name="quotation_format" value={settings.quotation_format || ''} onChange={handleChange} placeholder="QTN/{FY}/{SEQ:3}" />
+                    <Input 
+                        name="quotation_format" 
+                        value={settings.quotation_format || ''} 
+                        onChange={handleChange} 
+                        disabled={disabled}
+                    />
                 </div>
                 <div className="space-y-2">
                     <Label>Document Label</Label>
-                    <Input name="quotation_label" value={settings.quotation_label || ''} onChange={handleChange} />
+                    <Input 
+                        name="quotation_label" 
+                        value={settings.quotation_label || ''} 
+                        onChange={handleChange} 
+                        disabled={disabled}
+                    />
                 </div>
 
-                <div className="pt-4 border-t space-y-3">
-                    <Label className="text-sm font-semibold">Sequence Management</Label>
-                    <div className="flex items-center gap-2">
-                        <Input value={nextQuoteSeq} onChange={e => setNextQuoteSeq(e.target.value)} placeholder="Set next # (e.g. 50)" className="flex-1" />
-                        <Button variant="secondary" onClick={() => updateSeq('QUOTATION', nextQuoteSeq)}>Set</Button>
-                        <Button variant="outline" size="icon" onClick={() => handleReset('QUOTATION')} title="Reset to 1">
-                            <RotateCcw className="w-4 h-4 text-red-500" />
-                        </Button>
+                {!disabled && (
+                    <div className="pt-4 border-t space-y-3">
+                        <Label className="text-sm font-semibold">Sequence Management</Label>
+                        <div className="flex items-center gap-2">
+                            <Input value={nextQuoteSeq} onChange={e => setNextQuoteSeq(e.target.value)} placeholder="Set next #" className="flex-1" />
+                            <Button variant="secondary" onClick={() => updateSeq('QUOTATION', nextQuoteSeq)}>Set</Button>
+                            <Button variant="outline" size="icon" onClick={() => handleReset('QUOTATION')}><RotateCcw className="w-4 h-4 text-red-500" /></Button>
+                        </div>
                     </div>
-                </div>
+                )}
             </CardContent>
        </Card>
 
-       <div className="lg:col-span-2 flex justify-end">
-          <Button onClick={saveSettings} disabled={loading} className="bg-primary text-white min-w-[150px]">
-              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-              Save Configurations
-          </Button>
-       </div>
+       {!disabled && (
+           <div className="lg:col-span-2 flex justify-end">
+              <Button onClick={saveSettings} disabled={loading} className="bg-primary text-white min-w-[150px]">
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                  Save Configurations
+              </Button>
+           </div>
+       )}
     </div>
   );
 }

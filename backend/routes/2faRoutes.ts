@@ -8,7 +8,7 @@ import { AuthRequest } from '../middleware/authMiddleware';
 const router = Router();
 const prisma = new PrismaClient();
 
-// POST: Generate 2FA Secret & QR Code
+// POST: Generate Secret
 router.post('/generate', async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthRequest;
@@ -17,34 +17,22 @@ router.post('/generate', async (req: Request, res: Response) => {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // Generate Secret
     const secret = authenticator.generateSecret();
-    
-    // Create otpauth URL for Authenticator Apps
     const otpauth = authenticator.keyuri(user.email, 'InvoiceCore', secret);
-    
-    // Generate QR Code Data URL
     const imageUrl = await QRCode.toDataURL(otpauth);
 
-    // Save secret temporarily (not enabled yet)
     await prisma.user.update({
       where: { id: userId },
       data: { two_factor_secret: secret }
     });
 
-    res.json({ 
-      secret, 
-      qrCode: imageUrl,
-      message: "Scan this QR code. Then call /enable with the token to activate." 
-    });
-
+    res.json({ secret, qrCode: imageUrl });
   } catch (error) {
-    console.error("2FA Generate Error:", error);
     res.status(500).json({ error: "Failed to generate 2FA" });
   }
 });
 
-// POST: Verify Token & Enable 2FA
+// POST: Enable
 router.post('/enable', async (req: Request, res: Response) => {
   try {
     const { token } = req.body;
@@ -52,68 +40,39 @@ router.post('/enable', async (req: Request, res: Response) => {
     const userId = authReq.user.id;
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
-
-    if (!user || !user.two_factor_secret) {
-        return res.status(400).json({ error: "2FA setup not initiated" });
-    }
+    if (!user || !user.two_factor_secret) return res.status(400).json({ error: "Setup not initiated" });
 
     const isValid = authenticator.check(token, user.two_factor_secret);
+    if (!isValid) return res.status(400).json({ error: "Invalid Code" });
 
-    if (!isValid) {
-        return res.status(400).json({ error: "Invalid Token. Try again." });
-    }
-
-    // Activate 2FA
     await prisma.user.update({
       where: { id: userId },
       data: { two_factor_enabled: true }
     });
 
-    // LOG ACTIVITY
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    await ActivityService.log(
-        userId, 
-        "ENABLE_2FA", 
-        "Enabled Two-Factor Authentication", 
-        "SECURITY", 
-        "2FA", 
-        ip as string
-    );
+    await ActivityService.log(userId, "ENABLE_2FA", "Enabled Two-Factor Authentication", "SECURITY", "2FA", ip as string);
 
-    res.json({ success: true, message: "2FA Enabled Successfully" });
-
+    res.json({ success: true });
   } catch (error) {
-    console.error("2FA Enable Error:", error);
     res.status(500).json({ error: "Failed to enable 2FA" });
   }
 });
 
-// POST: Disable 2FA
+// POST: Disable
 router.post('/disable', async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthRequest;
-    const userId = authReq.user.id;
-
     await prisma.user.update({
-      where: { id: userId },
+      where: { id: authReq.user.id },
       data: { two_factor_enabled: false, two_factor_secret: null }
     });
 
-    // LOG ACTIVITY
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    await ActivityService.log(
-        userId, 
-        "DISABLE_2FA", 
-        "Disabled Two-Factor Authentication", 
-        "SECURITY", 
-        "2FA", 
-        ip as string
-    );
+    await ActivityService.log(authReq.user.id, "DISABLE_2FA", "Disabled Two-Factor Authentication", "SECURITY", "2FA", ip as string);
 
-    res.json({ success: true, message: "2FA Disabled" });
-
+    res.json({ success: true });
   } catch (error) {
-    console.error("2FA Disable Error:", error);
     res.status(500).json({ error: "Failed to disable 2FA" });
   }
 });

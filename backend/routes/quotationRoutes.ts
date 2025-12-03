@@ -2,123 +2,42 @@ import { Router, Request, Response } from 'express';
 import { QuotationService } from '../services/QuotationService';
 import { PdfService } from '../services/PdfService';
 import { ActivityService } from '../services/ActivityService';
-import { AuthRequest } from '../middleware/authMiddleware';
-import { PrismaClient } from '@prisma/client';
+import { AuthRequest, authorize } from '../middleware/authMiddleware';
 
 const router = Router();
-const prisma = new PrismaClient();
 
-// GET: Generate PDF
-router.get('/:id/pdf', async (req: Request, res: Response) => {
+router.get('/:id/pdf', async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    const pdfBuffer = await PdfService.generateQuotationPdf(id);
-    
+    const pdf = await PdfService.generateQuotationPdf(Number(req.params.id));
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=quotation-${id}.pdf`);
-    res.send(pdfBuffer);
-  } catch (error) {
-    console.error("PDF Error:", error);
-    res.status(500).json({ error: "Failed to generate PDF" });
-  }
+    res.send(Buffer.from(pdf));
+  } catch (e) { res.status(500).json({ error: "Failed" }); }
 });
 
-// GET: List All
-router.get('/', async (req: Request, res: Response) => {
-  try {
-    const quotes = await QuotationService.getAllQuotations();
-    res.json(quotes);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch quotations" });
-  }
+router.get('/', async (req, res) => {
+  const quotes = await QuotationService.getAllQuotations();
+  res.json(quotes);
 });
 
-// GET: Single
-router.get('/:id', async (req: Request, res: Response) => {
-  try {
-    const quote = await QuotationService.getQuotationById(Number(req.params.id));
-    if (!quote) return res.status(404).json({ error: "Quotation not found" });
-    res.json(quote);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch quotation" });
-  }
-});
-
-// POST: Create
 router.post('/', async (req: Request, res: Response) => {
   try {
     const quote = await QuotationService.createQuotation(req.body);
-    
     const authReq = req as AuthRequest;
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    
-    await ActivityService.log(
-        authReq.user.id, 
-        "CREATE_QUOTE", 
-        `Created Quotation #${quote.quotation_number}`, 
-        "QUOTATION", 
-        quote.id.toString(), 
-        ip as string
-    );
-
+    await ActivityService.log(authReq.user.id, "CREATE_QUOTE", `Quote #${quote.quotation_number}`, "QUOTATION", quote.id.toString(), ip as string);
     res.status(201).json(quote);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Failed to create quotation" });
-  }
+  } catch (e) { res.status(500).json({ error: "Failed" }); }
 });
 
-// PUT: Update
-router.put('/:id', async (req: Request, res: Response) => {
+// Delete: Admin/Sudo Only
+router.delete('/:id', authorize(['SUDO_ADMIN', 'ADMIN']), async (req: Request, res: Response) => {
   try {
-    const id = Number(req.params.id);
-    const updated = await QuotationService.updateQuotation(id, req.body);
-
+    await QuotationService.deleteQuotation(Number(req.params.id));
     const authReq = req as AuthRequest;
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-
-    await ActivityService.log(
-        authReq.user.id, 
-        "UPDATE_QUOTE", 
-        `Updated Quotation #${updated.quotation_number}`, 
-        "QUOTATION", 
-        id.toString(), 
-        ip as string
-    );
-
-    res.json(updated);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Failed to update quotation" });
-  }
-});
-
-// DELETE: Delete
-router.delete('/:id', async (req: Request, res: Response) => {
-  try {
-    const id = Number(req.params.id);
-    const quote = await prisma.quotation.findUnique({ where: { id } });
-
-    await QuotationService.deleteQuotation(id);
-
-    if (quote) {
-        const authReq = req as AuthRequest;
-        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-        
-        await ActivityService.log(
-            authReq.user.id, 
-            "DELETE_QUOTE", 
-            `Deleted Quotation #${quote.quotation_number}`, 
-            "QUOTATION", 
-            id.toString(), 
-            ip as string
-        );
-    }
-
+    await ActivityService.log(authReq.user.id, "DELETE_QUOTE", `Deleted Quote #${req.params.id}`, "QUOTATION", req.params.id, ip as string);
     res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to delete quotation" });
-  }
+  } catch (e) { res.status(500).json({ error: "Failed" }); }
 });
 
 export default router;

@@ -5,9 +5,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useConfigurator } from "@/hooks/use-configurator";
+import { useRole } from "@/hooks/use-role"; // <--- Role Hook
 import { 
-  LayoutDashboard, FileText, Users, Settings, Wallet, Activity, 
-  ChevronLeft, ChevronRight, Search, BookOpen, LogOut, User, MoreVertical, Shield 
+  LayoutDashboard, FileText, Users, Settings, Wallet, 
+  ChevronLeft, ChevronRight, Search, BookOpen, LogOut, User, MoreVertical, Activity 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,18 +33,26 @@ export function Sidebar({ className, hideLogo = false, forceExpand = false }: Si
   const router = useRouter();
   const { sidebarType, setSidebarType } = useConfigurator();
   
+  // --- PERMISSION LOGIC ---
+  const { role, isAdmin, isSudo } = useRole(); 
+  // isAdmin = Sudo OR Admin
+  // isSudo = Sudo Only
+
   // Logic: If forceExpand is true (Mobile), ignore the 'mini' setting.
   const isMini = forceExpand ? false : sidebarType === 'mini';
 
+  // Navigation Items with Visibility Control
   const navItems = [
-    { href: "/", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/invoices", label: "Invoices", icon: FileText },
-    { href: "/quotations", label: "Quotations", icon: FileText },
-    { href: "/clients", label: "Clients", icon: Users },
-    { href: "/expenses", label: "Expenses", icon: Wallet },
-    { href: "/ledger", label: "Ledger", icon: BookOpen },
-    { href: "/activity", label: "Activity Log", icon: Activity },
-    { href: "/settings", label: "Settings", icon: Settings },
+    { href: "/", label: "Dashboard", icon: LayoutDashboard, visible: true },
+    { href: "/invoices", label: "Invoices", icon: FileText, visible: true },
+    { href: "/quotations", label: "Quotations", icon: FileText, visible: true },
+    { href: "/clients", label: "Clients", icon: Users, visible: true },
+    { href: "/expenses", label: "Expenses", icon: Wallet, visible: true },
+    
+    // Admin & Sudo Only
+    { href: "/ledger", label: "Ledger", icon: BookOpen, visible: isAdmin }, 
+    { href: "/activity", label: "Activity Log", icon: Activity, visible: isAdmin }, 
+    { href: "/settings", label: "Settings", icon: Settings, visible: isAdmin }, 
   ];
 
   const isLinkActive = (href: string) => {
@@ -62,12 +71,11 @@ export function Sidebar({ className, hideLogo = false, forceExpand = false }: Si
       className={cn(
         "flex flex-col bg-card border-r border-border/50 transition-all duration-300 ease-in-out z-40",
         "h-full md:h-screen sticky top-0",
-        // Width logic handled by isMini, overridden by className if needed
         isMini ? "w-[80px]" : "w-[290px]",
         className
       )}
     >
-      {/* --- 1. LOGO HEADER (Conditional) --- */}
+      {/* --- 1. LOGO HEADER --- */}
       {!hideLogo && (
         <div className={cn("h-20 flex items-center px-6 shrink-0", isMini && "justify-center px-0")}>
            <div className="flex items-center gap-3">
@@ -87,9 +95,9 @@ export function Sidebar({ className, hideLogo = false, forceExpand = false }: Si
         <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent mb-4 mx-6 shrink-0" />
       )}
       
-      {/* --- 2. SCROLLABLE NAVIGATION --- */}
+      {/* --- 2. NAVIGATION --- */}
       <nav className="flex-1 overflow-y-auto px-4 space-y-2 scrollbar-thin scrollbar-thumb-muted">
-        {navItems.map((item) => {
+        {navItems.filter(item => item.visible).map((item) => {
             const active = isLinkActive(item.href);
             return (
                 <Link 
@@ -110,7 +118,6 @@ export function Sidebar({ className, hideLogo = false, forceExpand = false }: Si
                         active && !isMini && "scale-105"
                     )} />
                     
-                    {/* TEXT LABELS: Now visible if forceExpand is true */}
                     {!isMini && (
                       <span className="truncate text-sm">{item.label}</span>
                     )}
@@ -140,13 +147,19 @@ export function Sidebar({ className, hideLogo = false, forceExpand = false }: Si
         )}>
             <Avatar className="h-9 w-9 border border-border shadow-sm cursor-pointer">
                 <AvatarImage src="" />
-                <AvatarFallback className="bg-gradient-to-br from-primary to-purple-600 text-white font-bold text-xs">AD</AvatarFallback>
+                <AvatarFallback className="bg-gradient-to-br from-primary to-purple-600 text-white font-bold text-xs">
+                    {role ? role.charAt(0) : 'U'}
+                </AvatarFallback>
             </Avatar>
 
             {!isMini && (
                 <div className="flex-1 overflow-hidden min-w-0">
-                    <p className="text-sm font-bold text-foreground truncate">Admin User</p>
-                    <p className="text-xs text-muted-foreground truncate">admin@core.com</p>
+                    <p className="text-sm font-bold text-foreground truncate">
+                        {isSudo ? "Owner" : (isAdmin ? "Administrator" : "Staff Member")}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate capitalize">
+                        {role?.toLowerCase().replace('_', ' ')}
+                    </p>
                 </div>
             )}
 
@@ -161,14 +174,16 @@ export function Sidebar({ className, hideLogo = false, forceExpand = false }: Si
                         <DropdownMenuLabel>My Account</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         
-                        {/* LINK TO PROFILE PAGE */}
                         <DropdownMenuItem onClick={() => router.push('/profile')} className="cursor-pointer">
                             <User className="mr-2 h-4 w-4" /> Profile & Security
                         </DropdownMenuItem>
                         
-                        <DropdownMenuItem onClick={() => router.push('/settings')} className="cursor-pointer">
-                            <Settings className="mr-2 h-4 w-4" /> System Settings
-                        </DropdownMenuItem>
+                        {/* Only Admins see Settings link here too */}
+                        {isAdmin && (
+                            <DropdownMenuItem onClick={() => router.push('/settings')} className="cursor-pointer">
+                                <Settings className="mr-2 h-4 w-4" /> System Settings
+                            </DropdownMenuItem>
+                        )}
 
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600 cursor-pointer">
@@ -179,7 +194,7 @@ export function Sidebar({ className, hideLogo = false, forceExpand = false }: Si
             )}
         </div>
 
-        {/* Collapse Button - HIDDEN on Mobile always */}
+        {/* Collapse Button (Desktop Only) */}
         <Button 
           variant="ghost" 
           size="sm" 

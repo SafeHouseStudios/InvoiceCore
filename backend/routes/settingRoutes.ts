@@ -2,18 +2,21 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import sanitizeHtml from 'sanitize-html';
 import { ActivityService } from '../services/ActivityService';
-import { AuthRequest } from '../middleware/authMiddleware';
+import { AuthRequest, authorize } from '../middleware/authMiddleware';
 
 const router = Router();
 const prisma = new PrismaClient();
 
-// --- COMPANY PROFILE ---
-router.get('/company', async (req, res) => {
+// ==============================
+// 1. COMPANY PROFILE
+// ==============================
+router.get('/company', authorize(['SUDO_ADMIN', 'ADMIN']), async (req, res) => {
   const setting = await prisma.systemSetting.findUnique({ where: { key: 'COMPANY_PROFILE' } });
   res.json(setting?.json_value || {});
 });
 
-router.put('/company', async (req: Request, res: Response) => {
+// ONLY SUDO CAN EDIT
+router.put('/company', authorize(['SUDO_ADMIN']), async (req: Request, res: Response) => {
   try {
     const { company_name, address, state_code, gstin, cin, phone, email, bank_details, logo, signature, stamp } = req.body;
 
@@ -31,7 +34,7 @@ router.put('/company', async (req: Request, res: Response) => {
 
     const authReq = req as AuthRequest;
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    await ActivityService.log(authReq.user.id, "UPDATE_SETTINGS", "Updated Company Profile", "SETTINGS", "COMPANY", ip as string);
+    await ActivityService.log(authReq.user.id, "UPDATE_PROFILE", "Updated Company Profile", "SETTINGS", "COMPANY", ip as string);
 
     res.json({ success: true });
   } catch (error) {
@@ -39,13 +42,16 @@ router.put('/company', async (req: Request, res: Response) => {
   }
 });
 
-// --- DOCUMENT SETTINGS ---
-router.get('/documents', async (req, res) => {
+// ==============================
+// 2. DOCUMENT SETTINGS
+// ==============================
+router.get('/documents', authorize(['SUDO_ADMIN', 'ADMIN']), async (req: Request, res: Response) => {
   const setting = await prisma.systemSetting.findUnique({ where: { key: 'DOCUMENT_SETTINGS' } });
   res.json(setting?.json_value || { invoice_format: "INV/{FY}/{SEQ:3}", quotation_format: "QTN/{FY}/{SEQ:3}", invoice_label: "INVOICE", quotation_label: "QUOTATION" });
 });
 
-router.put('/documents', async (req: Request, res: Response) => {
+// ONLY SUDO CAN EDIT
+router.put('/documents', authorize(['SUDO_ADMIN']), async (req: Request, res: Response) => {
   try {
     const { invoice_format, quotation_format, invoice_label, quotation_label } = req.body;
     await prisma.systemSetting.upsert({
@@ -56,7 +62,7 @@ router.put('/documents', async (req: Request, res: Response) => {
     
     const authReq = req as AuthRequest;
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    await ActivityService.log(authReq.user.id, "UPDATE_SETTINGS", "Updated Document Formats", "SETTINGS", "DOCS", ip as string);
+    await ActivityService.log(authReq.user.id, "UPDATE_DOC_SETTINGS", "Updated Document Formats", "SETTINGS", "DOCS", ip as string);
 
     res.json({ success: true });
   } catch (error) {
@@ -64,8 +70,8 @@ router.put('/documents', async (req: Request, res: Response) => {
   }
 });
 
-// --- SEQUENCES ---
-router.put('/sequence', async (req: Request, res: Response) => {
+// ONLY SUDO CAN EDIT SEQUENCE
+router.put('/sequence', authorize(['SUDO_ADMIN']), async (req: Request, res: Response) => {
   try {
     const { type, next_number } = req.body;
     if (!next_number || isNaN(Number(next_number))) return res.status(400).json({ error: "Invalid number" });
@@ -101,8 +107,11 @@ router.put('/sequence', async (req: Request, res: Response) => {
   }
 });
 
-// --- TEMPLATES ---
-router.post('/template', async (req: Request, res: Response) => {
+// ==============================
+// 3. TEMPLATES
+// ==============================
+// ONLY SUDO CAN SAVE
+router.post('/template', authorize(['SUDO_ADMIN']), async (req: Request, res: Response) => {
   try {
     const { html, type } = req.body; 
     const key = type === 'QUOTATION' ? 'QUOTATION_TEMPLATE' : 'INVOICE_TEMPLATE';
@@ -128,7 +137,7 @@ router.post('/template', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/template/:type', async (req, res) => {
+router.get('/template/:type', authorize(['SUDO_ADMIN', 'ADMIN']), async (req, res) => {
   const key = req.params.type === 'QUOTATION' ? 'QUOTATION_TEMPLATE' : 'INVOICE_TEMPLATE';
   const setting = await prisma.systemSetting.findUnique({ where: { key } });
   res.json({ html: setting?.value || '' });

@@ -1,136 +1,79 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { InvoiceService } from '../services/InvoiceService';
 import { PdfService } from '../services/PdfService';
 import { TaxService } from '../services/TaxService';
 import { ActivityService } from '../services/ActivityService';
 import { PrismaClient } from '@prisma/client';
-import { AuthRequest } from '../middleware/authMiddleware';
+import { AuthRequest, authorize } from '../middleware/authMiddleware';
 
 const prisma = new PrismaClient();
 const router = Router();
 
-// POST: Calculate Tax
 router.post('/calculate-tax', async (req, res) => {
   try {
     const { clientStateCode, clientCountry } = req.body;
-    if (!clientStateCode && clientStateCode !== 0) {
-        return res.status(400).json({ error: "Client State Code is required" });
-    }
     const taxLogic = await TaxService.calculateTaxType(Number(clientStateCode), clientCountry);
     res.json(taxLogic);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to calculate tax" });
-  }
+  } catch (e) { res.status(500).json({ error: "Tax calc failed" }); }
 });
 
-// GET: Generate PDF
 router.get('/:id/pdf', async (req, res) => {
   try {
-    const invoiceId = Number(req.params.id);
-    const pdfData = await PdfService.generateInvoicePdf(invoiceId);
-    const pdfBuffer = Buffer.from(pdfData);
-
+    const id = Number(req.params.id);
+    const pdfData = await PdfService.generateInvoicePdf(id);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Length', pdfBuffer.length);
-    res.setHeader('Content-Disposition', `inline; filename=invoice-${invoiceId}.pdf`);
-    res.send(pdfBuffer);
-  } catch (error) {
-    console.error("PDF Route Error:", error);
-    res.status(500).json({ error: "Failed to generate PDF" });
-  }
+    res.setHeader('Content-Disposition', `inline; filename=invoice-${id}.pdf`);
+    res.send(Buffer.from(pdfData));
+  } catch (e) { res.status(500).json({ error: "PDF failed" }); }
 });
 
-// GET: List all
 router.get('/', async (req, res) => {
-  try {
-    const invoices = await prisma.invoice.findMany({
-      include: { client: true },
-      orderBy: { created_at: 'desc' }
-    });
-    res.json(invoices);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch invoices" });
-  }
+  const invoices = await prisma.invoice.findMany({ include: { client: true }, orderBy: { created_at: 'desc' } });
+  res.json(invoices);
 });
 
-// GET: Single Invoice
 router.get('/:id', async (req, res) => {
-    try {
-      const invoice = await prisma.invoice.findUnique({
-        where: { id: Number(req.params.id) },
-        include: { client: true, bank_account: true }
-      });
-      if (!invoice) return res.status(404).json({ error: "Not found" });
-      res.json(invoice);
-    } catch (error) {
-      res.status(500).json({ error: "Fetch failed" });
-    }
+  const invoice = await prisma.invoice.findUnique({ where: { id: Number(req.params.id) }, include: { client: true, bank_account: true } });
+  if (!invoice) return res.status(404).json({ error: "Not found" });
+  res.json(invoice);
 });
 
-// POST: Create
-router.post('/', async (req, res) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const invoice = await InvoiceService.createInvoice(req.body);
-    
-    // Activity Log
-    const userId = (req as AuthRequest).user.id;
-    // @ts-ignore
-    await ActivityService.log(userId, "CREATE_INVOICE", `Created Invoice #${invoice.invoice_number}`, "INVOICE", invoice.id.toString());
-
+    const authReq = req as AuthRequest;
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    await ActivityService.log(authReq.user.id, "CREATE_INVOICE", `Invoice #${invoice.invoice_number}`, "INVOICE", invoice.id.toString(), ip as string);
     res.status(201).json(invoice);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || "Failed to create invoice" });
-  }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// PUT: Update
 router.put('/:id', async (req, res) => {
   try {
     const updated = await InvoiceService.updateInvoice(Number(req.params.id), req.body);
     res.json(updated);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || "Update failed" });
-  }
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// PATCH: Status
-router.patch('/:id/status', async (req, res) => {
+router.patch('/:id/status', async (req: Request, res: Response) => {
   try {
-    const id = Number(req.params.id);
-    const updated = await prisma.invoice.update({
-      where: { id },
-      data: { status: req.body.status }
-    });
-
-    // Activity Log
-    const userId = (req as AuthRequest).user.id;
-    await ActivityService.log(userId, "UPDATE_STATUS", `Invoice #${updated.invoice_number} marked as ${req.body.status}`, "INVOICE", id.toString());
-
+    const updated = await prisma.invoice.update({ where: { id: Number(req.params.id) }, data: { status: req.body.status } });
+    const authReq = req as AuthRequest;
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    await ActivityService.log(authReq.user.id, "UPDATE_STATUS", `Inv #${updated.invoice_number} -> ${req.body.status}`, "INVOICE", updated.id.toString(), ip as string);
     res.json(updated);
-  } catch (error) {
-    res.status(500).json({ error: "Update failed" });
-  }
+  } catch (e) { res.status(500).json({ error: "Update failed" }); }
 });
 
-// DELETE: Delete Invoice
-router.delete('/:id', async (req, res) => {
+// DELETE: Admins Only
+router.delete('/:id', authorize(['SUDO_ADMIN', 'ADMIN']), async (req: Request, res: Response) => {
   try {
-    const id = Number(req.params.id);
-    
-    // Get invoice details for log before deleting
-    const inv = await prisma.invoice.findUnique({ where: { id } });
-    
-    await InvoiceService.deleteInvoice(id);
-
-    if (inv) {
-        const userId = (req as AuthRequest).user.id;
-        await ActivityService.log(userId, "DELETE_INVOICE", `Deleted Invoice #${inv.invoice_number}`, "INVOICE", id.toString());
-    }
-
-    res.json({ success: true, message: "Invoice deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to delete invoice" });
-  }
+    await InvoiceService.deleteInvoice(Number(req.params.id));
+    const authReq = req as AuthRequest;
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    await ActivityService.log(authReq.user.id, "DELETE_INVOICE", `Deleted Invoice #${req.params.id}`, "INVOICE", req.params.id, ip as string);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: "Delete failed" }); }
 });
 
 export default router;

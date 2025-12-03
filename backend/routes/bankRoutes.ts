@@ -1,89 +1,50 @@
 import { Router, Request, Response } from 'express';
 import { BankService } from '../services/BankService';
 import { ActivityService } from '../services/ActivityService';
-import { AuthRequest } from '../middleware/authMiddleware';
+import { AuthRequest, authorize } from '../middleware/authMiddleware';
 
 const router = Router();
 
-// GET: List
-router.get('/', async (req: Request, res: Response) => {
-  try {
-    const accounts = await BankService.getAllAccounts();
-    res.json(accounts);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch bank accounts" });
-  }
+router.get('/', async (req, res) => {
+  const accounts = await BankService.getAllAccounts();
+  res.json(accounts);
 });
 
-// POST: Create
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authorize(['SUDO_ADMIN', 'ADMIN']), async (req: Request, res: Response) => {
   try {
     const account = await BankService.createAccount(req.body);
-    
     const authReq = req as AuthRequest;
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-
-    await ActivityService.log(
-        authReq.user.id, "CREATE_BANK", `Added Bank Account: ${account.label}`, "BANK", account.id.toString(), ip as string
-    );
-
+    await ActivityService.log(authReq.user.id, "CREATE_BANK", `Created Bank: ${account.label}`, "BANK", account.id.toString(), ip as string);
     res.status(201).json(account);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to create bank account" });
-  }
+  } catch (e) { res.status(500).json({ error: "Failed to create bank" }); }
 });
 
-// PUT: Update
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', authorize(['SUDO_ADMIN', 'ADMIN']), async (req: Request, res: Response) => {
   try {
-    const id = Number(req.params.id);
-    const account = await BankService.updateAccount(id, req.body);
-
+    const account = await BankService.updateAccount(Number(req.params.id), req.body);
     const authReq = req as AuthRequest;
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-
-    await ActivityService.log(
-        authReq.user.id, "UPDATE_BANK", `Updated Bank Account: ${account.label}`, "BANK", id.toString(), ip as string
-    );
-
+    await ActivityService.log(authReq.user.id, "UPDATE_BANK", `Updated Bank: ${account.label}`, "BANK", req.params.id, ip as string);
     res.json(account);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to update bank account" });
-  }
+  } catch (e) { res.status(500).json({ error: "Failed to update bank" }); }
 });
 
-// PATCH: Set Default
-router.patch('/:id/default', async (req: Request, res: Response) => {
+router.patch('/:id/default', authorize(['SUDO_ADMIN', 'ADMIN']), async (req: Request, res: Response) => {
   try {
-    const id = Number(req.params.id);
-    await BankService.setAsDefault(id);
-    
-    const authReq = req as AuthRequest;
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-
-    await ActivityService.log(authReq.user.id, "DEFAULT_BANK", `Set Bank #${id} as default`, "BANK", id.toString(), ip as string);
-
+    await BankService.setAsDefault(Number(req.params.id));
     res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to update default status" });
-  }
+  } catch (e) { res.status(500).json({ error: "Failed" }); }
 });
 
-// DELETE: Delete
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', authorize(['SUDO_ADMIN', 'ADMIN']), async (req: Request, res: Response) => {
   try {
-    const id = Number(req.params.id);
-    await BankService.deleteAccount(id);
-
+    await BankService.deleteAccount(Number(req.params.id));
     const authReq = req as AuthRequest;
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-
-    await ActivityService.log(authReq.user.id, "DELETE_BANK", `Deleted Bank Account #${id}`, "BANK", id.toString(), ip as string);
-
+    await ActivityService.log(authReq.user.id, "DELETE_BANK", `Deleted Bank #${req.params.id}`, "BANK", req.params.id, ip as string);
     res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to delete account" });
-  }
+  } catch (e) { res.status(500).json({ error: "Failed" }); }
 });
 
 export default router;

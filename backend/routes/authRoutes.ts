@@ -162,23 +162,32 @@ router.post('/reset-password', async (req, res) => {
 // 3. SETUP & UTILS
 // ==============================
 
+// POST: Initial Admin Setup
 router.post('/register-admin', async (req, res) => {
   try {
     const { email, password } = req.body;
+    
     const userCount = await prisma.user.count();
-    if (userCount > 0) return res.status(403).json({ error: "Admin already exists." });
+    if (userCount > 0) {
+        return res.status(403).json({ error: "System already initialized." });
+    }
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    // Create the SUPER ADMIN (Owner)
     const user = await prisma.user.create({
-      data: { email, password_hash: hashedPassword, role: 'ADMIN' }
+      data: {
+        email,
+        password_hash: hashedPassword,
+        role: 'SUDO_ADMIN' // <--- Changed from ADMIN
+      }
     });
 
-    res.json({ message: "Admin created successfully", userId: user.id });
+    res.json({ message: "System initialized. Sudo Admin created.", userId: user.id });
   } catch (error) {
     console.error("Registration Error:", error);
-    res.status(500).json({ error: "Could not create admin user" });
+    res.status(500).json({ error: "Initialization failed" });
   }
 });
 

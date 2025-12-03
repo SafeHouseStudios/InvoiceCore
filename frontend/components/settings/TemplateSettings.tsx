@@ -4,13 +4,18 @@ import React, { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Save, Code, Eye } from "lucide-react";
+import { Loader2, Save } from "lucide-react";
 import CodeMirror from "@uiw/react-codemirror";
 import { html } from "@codemirror/lang-html";
 import DOMPurify from "dompurify";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/components/ui/toast-context";
 
-export function TemplateSettings() {
+interface TemplateSettingsProps {
+  disabled?: boolean; // <--- Step A: Define Prop
+}
+
+export function TemplateSettings({ disabled }: TemplateSettingsProps) { // <--- Step B: Destructure
+  const { toast } = useToast();
   const [invoiceHtml, setInvoiceHtml] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -18,15 +23,15 @@ export function TemplateSettings() {
   useEffect(() => {
     api.get('/settings/template/INVOICE').then(res => {
         if (res.data.html) setInvoiceHtml(res.data.html);
-        else setInvoiceHtml(DEFAULT_TEMPLATE); // Set a default starter if empty
+        else setInvoiceHtml(DEFAULT_TEMPLATE); 
     });
   }, []);
 
   const handleSave = async () => {
+    if (disabled) return; // <--- Logic Guard
     setLoading(true);
     
-    // 1. CLIENT-SIDE SANITIZATION
-    // Note: We allow style tags here for the editor preview, backend re-sanitizes
+    // Client-side sanitization (Backend does it too)
     const clean = DOMPurify.sanitize(invoiceHtml, {
         ADD_TAGS: ['style'],
         ADD_ATTR: ['style', 'class']
@@ -34,9 +39,9 @@ export function TemplateSettings() {
 
     try {
         await api.post('/settings/template', { html: clean, type: 'INVOICE' });
-        alert("Template Saved & Secured!");
+        toast("Template Saved & Secured!", "success");
     } catch (e) {
-        alert("Failed to save template");
+        toast("Failed to save template", "error");
     } finally {
         setLoading(false);
     }
@@ -49,10 +54,14 @@ export function TemplateSettings() {
             <CardHeader className="pb-2">
                 <CardTitle className="flex justify-between items-center">
                     <span>HTML Editor</span>
-                    <Button size="sm" onClick={handleSave} disabled={loading} className="bg-primary text-white">
-                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                        Save Template
-                    </Button>
+                    {/* Step C: UI Guard */}
+                    {!disabled && (
+                        <Button size="sm" onClick={handleSave} disabled={loading} className="bg-primary text-white">
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                            Save Template
+                        </Button>
+                    )}
+                    {disabled && <span className="text-xs text-amber-500 font-medium">View Only</span>}
                 </CardTitle>
                 <CardDescription>Use <code>{`{{variable}}`}</code> to inject data.</CardDescription>
             </CardHeader>
@@ -64,6 +73,8 @@ export function TemplateSettings() {
                     onChange={(val) => setInvoiceHtml(val)}
                     theme="dark"
                     className="h-full text-sm"
+                    readOnly={disabled} // <--- Step C: Lock Editor
+                    editable={!disabled}
                 />
             </CardContent>
         </Card>
@@ -76,7 +87,6 @@ export function TemplateSettings() {
             </CardHeader>
             <CardContent className="flex-1 p-0 bg-white dark:bg-slate-900 overflow-auto border-t border-border">
                 <div className="p-4">
-                    {/* Dangerously Set HTML is safe here because we control the input */}
                     <div 
                         className="invoice-preview origin-top scale-75 w-[210mm] h-[297mm] bg-white text-black shadow-lg mx-auto p-10"
                         dangerouslySetInnerHTML={{ __html: invoiceHtml }}
@@ -88,59 +98,4 @@ export function TemplateSettings() {
   );
 }
 
-const DEFAULT_TEMPLATE = `
-<html>
-<head>
-  <style>
-    body { font-family: sans-serif; padding: 20px; }
-    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #333; }
-    h1 { color: #4318FF; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background-color: #f2f2f2; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div>
-        <h1>{{company_name}}</h1>
-        <p>{{company_address}}</p>
-    </div>
-    <div style="text-align: right;">
-        <h2>INVOICE</h2>
-        <p># {{invoice_number}}</p>
-        <p>Date: {{issue_date}}</p>
-    </div>
-  </div>
-
-  <div style="margin-top: 20px;">
-    <strong>Bill To:</strong><br>
-    {{client_name}}<br>
-    {{client_address}}
-  </div>
-
-  <table>
-    <thead>
-        <tr>
-            <th>Description</th>
-            <th>Qty</th>
-            <th>Rate</th>
-            <th>Amount</th>
-        </tr>
-    </thead>
-    <tbody>
-        {{#items}}
-        <tr>
-            <td>{{description}}</td>
-            <td>{{quantity}}</td>
-            <td>{{rate}}</td>
-            <td>{{amount}}</td>
-        </tr>
-        {{/items}}
-    </tbody>
-  </table>
-
-  <h3 style="text-align: right; margin-top: 20px;">Total: {{grand_total}}</h3>
-</body>
-</html>
-`;
+const DEFAULT_TEMPLATE = `<html><body><h1>Invoice</h1></body></html>`;
