@@ -73,13 +73,18 @@ app.use('/api/activity', activityRoutes);
 app.listen(PORT, () => {
   console.log(`[InvoiceCore] Server running on port ${PORT}`);
 
-  // --- LOG ROTATION TASK ---
-  // Run immediately on startup
-  ActivityService.pruneLogs(7);
+  // FIX: Only run maintenance if the Database URL is actually configured
+  if (process.env.DATABASE_URL) {
+      // --- LOG ROTATION TASK ---
+      // Run immediately on startup
+      ActivityService.pruneLogs(7);
 
-  // Then run every 24 hours (86400000 ms)
-  setInterval(() => {
-    console.log("[Cron] Running daily log rotation...");
-    ActivityService.pruneLogs(7);
-  }, 86400000);
+      // Then run every 24 hours (86400000 ms)
+      setInterval(() => {
+        console.log("[Cron] Running daily log rotation...");
+        ActivityService.pruneLogs(7);
+      }, 86400000);
+  } else {
+      console.log("[InvoiceCore] System awaiting setup. Go to /setup to initialize.");
+  }
 });
