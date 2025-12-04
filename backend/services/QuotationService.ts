@@ -47,7 +47,8 @@ export class QuotationService {
       const month = dateObj.getMonth() + 1;
       const year = dateObj.getFullYear();
       const shortYear = year % 100;
-      const fy = month >= 4 ? `${shortYear}-${shortYear + 1}` : `${shortYear - 1}-${shortYear}`;
+      // UPDATED: Removed hyphen from format
+      const fy = month >= 4 ? `${shortYear}${shortYear + 1}` : `${shortYear - 1}${shortYear}`;
 
       // Sequence Handling
       let sequence = await tx.quotationSequence.findUnique({ where: { fiscal_year: fy } });

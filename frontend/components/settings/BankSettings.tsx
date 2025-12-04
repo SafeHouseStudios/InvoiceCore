@@ -29,12 +29,26 @@ export function BankSettings({ disabled }: BankSettingsProps) {
   const openDialog = (bank?: any) => {
     if (disabled) return;
     setEditingId(bank ? bank.id : null);
-    setForm(bank || { label: '', currency: 'USD', is_default: false });
+    setForm(bank || { 
+        label: '', 
+        currency: 'USD', 
+        is_default: false,
+        bank_name: '',
+        account_holder: '',
+        account_number: '',
+        routing_number: '',
+        swift_code: '',
+        ifsc_code: '',
+        iban: '',
+        sort_code: '',
+        upi_id: '',
+        branch_address: ''
+    });
     setIsOpen(true);
   };
 
   const saveBank = async () => {
-    if(!form.label || !form.account_number) return toast("Missing fields", "warning");
+    if(!form.label || !form.account_number) return toast("Missing required fields (Label & Account #)", "warning");
     try {
         if(editingId) await api.put(`/banks/${editingId}`, form);
         else await api.post('/banks', form);
@@ -44,7 +58,7 @@ export function BankSettings({ disabled }: BankSettingsProps) {
   };
 
   const deleteBank = async (id: number) => {
-     if(!confirm("Delete?")) return;
+     if(!confirm("Delete this bank account?")) return;
      try { await api.delete(`/banks/${id}`); loadBanks(); toast("Bank deleted", "success"); } 
      catch(e) { toast("Failed", "error"); }
   };
@@ -68,10 +82,20 @@ export function BankSettings({ disabled }: BankSettingsProps) {
                 {banks.map(bank => (
                     <div key={bank.id} className={`p-5 rounded-xl border-2 transition-all ${bank.is_default ? 'border-primary bg-primary/5' : 'border-border bg-background hover:border-primary/20'}`}>
                         <div className="flex justify-between items-start">
-                            <div>
-                                <h4 className="font-bold flex items-center gap-2">{bank.label} {bank.is_default && <Badge>Default</Badge>}</h4>
-                                <p className="text-sm text-muted-foreground mt-1">{bank.bank_name}</p>
-                                <p className="text-xs text-muted-foreground font-mono">{bank.account_number} • {bank.currency}</p>
+                            <div className="space-y-1">
+                                <h4 className="font-bold flex items-center gap-2 text-base">{bank.label} {bank.is_default && <Badge>Default</Badge>}</h4>
+                                <p className="text-sm font-semibold">{bank.bank_name}</p>
+                                <p className="text-xs text-muted-foreground">Acct: <span className="font-mono">{bank.account_number}</span> ({bank.currency})</p>
+                                
+                                {/* Extended Details Display */}
+                                <div className="text-[10px] text-muted-foreground grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
+                                    {bank.routing_number && <span>Routing: {bank.routing_number}</span>}
+                                    {bank.swift_code && <span>SWIFT: {bank.swift_code}</span>}
+                                    {bank.iban && <span>IBAN: {bank.iban}</span>}
+                                    {bank.sort_code && <span>Sort: {bank.sort_code}</span>}
+                                    {bank.ifsc_code && <span>IFSC: {bank.ifsc_code}</span>}
+                                    {bank.upi_id && <span>UPI: {bank.upi_id}</span>}
+                                </div>
                             </div>
                             {!disabled && (
                                 <Button variant="ghost" size="icon" onClick={() => openDialog(bank)}><Pencil className="w-4 h-4"/></Button>
@@ -81,7 +105,7 @@ export function BankSettings({ disabled }: BankSettingsProps) {
                         {!disabled && (
                             <div className="mt-4 pt-3 border-t flex justify-between items-center">
                                 {!bank.is_default && <Button variant="link" size="sm" className="p-0 h-auto text-primary" onClick={() => setDefault(bank.id)}>Make Default</Button>}
-                                <Button variant="ghost" size="sm" className="text-red-500 ml-auto" onClick={() => deleteBank(bank.id)}><Trash2 className="w-4 h-4 mr-1"/> Delete</Button>
+                                <Button variant="ghost" size="sm" className="text-red-500 ml-auto hover:bg-red-50 hover:text-red-600" onClick={() => deleteBank(bank.id)}><Trash2 className="w-4 h-4 mr-1"/> Delete</Button>
                             </div>
                         )}
                     </div>
@@ -89,25 +113,84 @@ export function BankSettings({ disabled }: BankSettingsProps) {
             </div>
         </CardContent>
         
-        {/* Dialog only renders if not disabled (though openDialog is guarded too) */}
+        {/* Add/Edit Dialog */}
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogContent className="sm:max-w-[600px]">
+            <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>{editingId ? "Edit" : "Add"} Account</DialogTitle></DialogHeader>
+                
                 <div className="grid gap-4 py-4">
+                    {/* Basic Info */}
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2"><Label>Label</Label><Input value={form.label} onChange={e => setForm({...form, label: e.target.value})} placeholder="Main" /></div>
-                        <div className="space-y-2"><Label>Currency</Label><select className="w-full h-9 border rounded-md bg-background px-3 text-sm" value={form.currency} onChange={e => setForm({...form, currency: e.target.value})}><option>USD</option><option>INR</option><option>EUR</option><option>GBP</option></select></div>
+                        <div className="space-y-2">
+                            <Label>Label (e.g. USD Account)</Label>
+                            <Input value={form.label} onChange={e => setForm({...form, label: e.target.value})} placeholder="Primary Operations" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Currency</Label>
+                            <select 
+                                className="w-full h-9 border rounded-md bg-background px-3 text-sm" 
+                                value={form.currency} 
+                                onChange={e => setForm({...form, currency: e.target.value})}
+                            >
+                                <option value="USD">USD ($)</option>
+                                <option value="INR">INR (₹)</option>
+                                <option value="EUR">EUR (€)</option>
+                                <option value="GBP">GBP (£)</option>
+                                <option value="CAD">CAD ($)</option>
+                                <option value="AUD">AUD ($)</option>
+                            </select>
+                        </div>
                     </div>
+
+                    {/* Bank Identity */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2"><Label>Bank Name</Label><Input value={form.bank_name} onChange={e => setForm({...form, bank_name: e.target.value})} /></div>
-                        <div className="space-y-2"><Label>Account #</Label><Input value={form.account_number} onChange={e => setForm({...form, account_number: e.target.value})} /></div>
+                        <div className="space-y-2"><Label>Account Holder Name</Label><Input value={form.account_holder} onChange={e => setForm({...form, account_holder: e.target.value})} /></div>
                     </div>
-                    <div className="space-y-2"><Label>Holder Name</Label><Input value={form.account_holder} onChange={e => setForm({...form, account_holder: e.target.value})} /></div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2"><Label>IFSC</Label><Input value={form.ifsc_code} onChange={e => setForm({...form, ifsc_code: e.target.value})} /></div>
-                        <div className="space-y-2"><Label>SWIFT</Label><Input value={form.swift_code} onChange={e => setForm({...form, swift_code: e.target.value})} /></div>
+
+                    {/* Account Numbers */}
+                    <div className="space-y-2">
+                        <Label>Account Number</Label>
+                        <Input value={form.account_number} onChange={e => setForm({...form, account_number: e.target.value})} />
                     </div>
-                    <div className="space-y-2"><Label>Branch Address</Label><Textarea value={form.branch_address} onChange={e => setForm({...form, branch_address: e.target.value})} /></div>
+
+                    {/* International Codes (Grid) */}
+                    <div className="grid grid-cols-3 gap-4 bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border">
+                         <div className="space-y-2">
+                            <Label className="text-xs">Routing Number (USD/CAD)</Label>
+                            <Input className="h-8 text-sm" value={form.routing_number || ''} onChange={e => setForm({...form, routing_number: e.target.value})} placeholder="021..." />
+                        </div>
+                         <div className="space-y-2">
+                            <Label className="text-xs">SWIFT / BIC</Label>
+                            <Input className="h-8 text-sm" value={form.swift_code || ''} onChange={e => setForm({...form, swift_code: e.target.value})} placeholder="CHAS..." />
+                        </div>
+                         <div className="space-y-2">
+                            <Label className="text-xs">IBAN (Europe)</Label>
+                            <Input className="h-8 text-sm" value={form.iban || ''} onChange={e => setForm({...form, iban: e.target.value})} placeholder="GB89..." />
+                        </div>
+                         <div className="space-y-2">
+                            <Label className="text-xs">Sort Code (UK)</Label>
+                            <Input className="h-8 text-sm" value={form.sort_code || ''} onChange={e => setForm({...form, sort_code: e.target.value})} placeholder="04-14..." />
+                        </div>
+                         <div className="space-y-2">
+                            <Label className="text-xs">IFSC (India)</Label>
+                            <Input className="h-8 text-sm" value={form.ifsc_code || ''} onChange={e => setForm({...form, ifsc_code: e.target.value})} placeholder="SBIN..." />
+                        </div>
+                         <div className="space-y-2">
+                            <Label className="text-xs">UPI ID (India)</Label>
+                            <Input className="h-8 text-sm" value={form.upi_id || ''} onChange={e => setForm({...form, upi_id: e.target.value})} placeholder="user@bank" />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Branch Address</Label>
+                        <Textarea 
+                            value={form.branch_address || ''} 
+                            onChange={e => setForm({...form, branch_address: e.target.value})} 
+                            placeholder="Full address of the bank branch..."
+                            className="min-h-[60px]"
+                        />
+                    </div>
                 </div>
                 <DialogFooter><Button onClick={saveBank}>Save Account</Button></DialogFooter>
             </DialogContent>

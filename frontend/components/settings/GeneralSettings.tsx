@@ -1,23 +1,59 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
+import api from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 
 interface GeneralSettingsProps {
   profile: any;
   handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
   handleSave: () => void;
   loading: boolean;
-  disabled?: boolean; // <--- Controls Read-Only Mode
+  disabled?: boolean;
 }
 
 export function GeneralSettings({ profile, handleChange, handleSave, loading, disabled }: GeneralSettingsProps) {
-  
+  const [states, setStates] = useState<any[]>([]);
+
+  // Fetch States for the Dropdown
+  useEffect(() => {
+    const fetchStates = async () => {
+      try {
+        const res = await api.get('/utils/states');
+        if (Array.isArray(res.data)) {
+            setStates(res.data);
+        }
+      } catch (error) {
+        console.error("Failed to load states", error);
+      }
+    };
+    fetchStates();
+  }, []);
+
+  // Helper to bridge Shadcn Select (which returns string) to your existing handleChange
+  const handleSelectChange = (value: string) => {
+    const syntheticEvent = {
+      target: {
+        name: 'state_code',
+        value: value
+      }
+    } as unknown as React.ChangeEvent<HTMLSelectElement>;
+    
+    handleChange(syntheticEvent);
+  };
+
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
       <div className="xl:col-span-2">
@@ -36,7 +72,7 @@ export function GeneralSettings({ profile, handleChange, handleSave, loading, di
                   name="company_name" 
                   value={profile.company_name || ''} 
                   onChange={handleChange} 
-                  disabled={disabled} // <--- Disabled prop applied
+                  disabled={disabled}
                 />
               </div>
               <div className="space-y-2">
@@ -74,15 +110,24 @@ export function GeneralSettings({ profile, handleChange, handleSave, loading, di
             {/* Bottom Grid: Contact Info */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-2">
-                    <Label>State Code (GST)</Label>
-                    <Input 
-                        name="state_code" 
-                        type="number" 
-                        value={profile.state_code || ''} 
-                        onChange={handleChange} 
-                        placeholder="e.g. 27"
+                    <Label>State (Place of Supply)</Label>
+                    <Select 
+                        value={profile.state_code ? String(profile.state_code) : ""} 
+                        onValueChange={handleSelectChange}
                         disabled={disabled}
-                    />
+                    >
+                        <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select State" />
+                        </SelectTrigger>
+                        {/* FIXED: Added max-h-[200px] to force scrolling */}
+                        <SelectContent className="max-h-[200px]">
+                            {states.map((state) => (
+                                <SelectItem key={state.code} value={String(state.code)}>
+                                    {state.code} - {state.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
                 <div className="space-y-2">
                     <Label>Phone</Label>
@@ -104,7 +149,7 @@ export function GeneralSettings({ profile, handleChange, handleSave, loading, di
                 </div>
             </div>
 
-            {/* Save Button - Hidden if Disabled */}
+            {/* Save Button */}
             <div className="flex justify-end pt-4 border-t border-border">
               {!disabled ? (
                   <Button onClick={handleSave} disabled={loading} className="bg-primary text-white min-w-[140px]">
@@ -129,13 +174,13 @@ export function GeneralSettings({ profile, handleChange, handleSave, loading, di
               </CardHeader>
               <CardContent className="text-sm space-y-4 text-muted-foreground">
                   <p>
-                      <strong>State Code:</strong> Essential for GST calculation. Use the 2-digit code (e.g., 27 for Maharashtra).
+                      <strong>State Code:</strong> Essential for GST calculation. Selecting your state ensures that local sales (Same State) are taxed as CGST+SGST, while out-of-state sales are IGST.
                   </p>
                   <p>
                       <strong>CIN:</strong> Corporate Identity Number is required for registered companies in India.
                   </p>
                   <p>
-                      <strong>Logo:</strong> Upload your logo in the "Branding" tab to see it on invoices.
+                      <strong>Logo:</strong> Upload your logo in the &quot;Branding&quot; tab to see it on invoices.
                   </p>
               </CardContent>
           </Card>

@@ -12,25 +12,35 @@ import os from 'os';
 import { exec } from 'child_process';
 
 const router = Router();
-// Global prisma instance for login/normal ops
 const prisma = new PrismaClient();
 
 // --- HELPER: Dynamic Email Sender ---
 async function sendEmail(to: string, subject: string, text: string) {
-  try {
-    const setting = await prisma.systemSetting.findUnique({ where: { key: 'SMTP_CONFIG' } });
-    if (!setting?.json_value) return; 
+  const setting = await prisma.systemSetting.findUnique({ where: { key: 'SMTP_CONFIG' } });
+  
+  if (!setting?.json_value) {
+    console.warn("SMTP not configured. Skipping email.");
+    return;
+  }
 
-    const config = setting.json_value as any;
-    const transporter = nodemailer.createTransport({
-      host: config.host,
-      port: Number(config.port),
-      secure: Number(config.port) === 465,
-      auth: { user: config.user, pass: config.password }
-    });
+  const config = setting.json_value as any;
+  
+  const transporter = nodemailer.createTransport({
+    host: config.host,
+    port: Number(config.port),
+    secure: Number(config.port) === 465,
+    auth: { 
+      user: config.user, 
+      pass: config.password 
+    }
+  });
 
-    await transporter.sendMail({ from: config.fromEmail || config.user, to, subject, text });
-  } catch (e) { console.error("Email error:", e); }
+  await transporter.sendMail({ 
+    from: config.fromEmail || config.user,
+    to, 
+    subject, 
+    text 
+  });
 }
 
 const getPuppeteerPath = () => {
@@ -43,7 +53,7 @@ const getPuppeteerPath = () => {
 };
 
 // ==============================
-// 0. SYSTEM STATUS CHECK (NEW)
+// 0. STATUS CHECK
 // ==============================
 router.get('/status', async (req, res) => {
   const envPath = path.join(process.cwd(), '.env');
@@ -60,7 +70,7 @@ router.get('/status', async (req, res) => {
       await checkClient.$disconnect();
       res.json({ initialized: count > 0 });
   } catch (e) {
-      // If connection fails (No DB), assume not installed
+      // If connection fails, assume not installed
       res.json({ initialized: false });
   }
 });
@@ -68,11 +78,12 @@ router.get('/status', async (req, res) => {
 // ==============================
 // 1. LOGIN & AUTHENTICATION
 // ==============================
+
 router.post('/login', async (req, res) => {
   try {
     const { email, password, totpToken } = req.body;
+
     const user = await prisma.user.findUnique({ where: { email } });
-    
     if (!user) return res.status(400).json({ error: "User not found" });
 
     const validPass = await bcrypt.compare(password, user.password_hash);
@@ -80,8 +91,10 @@ router.post('/login', async (req, res) => {
 
     if (user.two_factor_enabled) {
         if (!totpToken) return res.json({ require2fa: true }); 
-        if (!user.two_factor_secret) return res.status(500).json({ error: "2FA secret missing." });
-        if (!authenticator.check(totpToken, user.two_factor_secret)) return res.status(400).json({ error: "Invalid 2FA Code" });
+        if (!user.two_factor_secret) return res.status(500).json({ error: "2FA enabled but secret missing." });
+        
+        const validTotp = authenticator.check(totpToken, user.two_factor_secret);
+        if (!validTotp) return res.status(400).json({ error: "Invalid 2FA Code" });
     }
 
     const token = jwt.sign(
@@ -99,13 +112,15 @@ router.post('/login', async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ error: "Login failed. System might be offline." });
+    console.error("Login Error:", error);
+    res.status(500).json({ error: "Login failed. System might need setup." });
   }
 });
 
 // ==============================
 // 2. PASSWORD RECOVERY
 // ==============================
+
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
@@ -122,17 +137,21 @@ router.post('/forgot-password', async (req, res) => {
 
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
     const resetLink = `${appUrl}/reset-password?token=${token}`;
-    await sendEmail(email, "Password Reset Request", `Click here to reset: ${resetLink}`);
     
-    res.json({ success: true });
+    await sendEmail(email, "Password Reset Request", `Click here to reset: ${resetLink}`);
+    await ActivityService.log(user.id, "FORGOT_PASSWORD", "Requested password reset link");
+
+    res.json({ success: true, message: "Reset link sent to email." });
   } catch (error: any) {
-    res.status(500).json({ error: "Failed to process request" });
+    res.status(500).json({ error: error.message || "Failed to process request" });
   }
 });
 
 router.post('/reset-password', async (req, res) => {
   try {
     const { token, newPassword } = req.body;
+    if (!token || !newPassword) return res.status(400).json({ error: "Invalid request" });
+    
     const user = await prisma.user.findFirst({
       where: { reset_token: token, reset_token_expiry: { gt: new Date() } }
     });
@@ -147,19 +166,21 @@ router.post('/reset-password', async (req, res) => {
       data: { password_hash: hashedPassword, reset_token: null, reset_token_expiry: null }
     });
 
-    res.json({ success: true });
+    await ActivityService.log(user.id, "RESET_PASSWORD", "Password reset successfully");
+    res.json({ success: true, message: "Password updated successfully" });
   } catch (error) {
     res.status(500).json({ error: "Failed to reset password" });
   }
 });
 
 // ==============================
-// 3. SYSTEM SETUP (ROBUST)
+// 3. SYSTEM INITIALIZATION & SETUP (FIXED)
 // ==============================
+
 router.post('/setup', async (req: Request, res: Response) => {
   const envPath = path.join(process.cwd(), '.env');
 
-  // 1. Initial Check: Prevent overwrite if already installed
+  // 1. Initial Check
   try {
     if (fs.existsSync(envPath)) {
         require('dotenv').config(); 
@@ -167,16 +188,20 @@ router.post('/setup', async (req: Request, res: Response) => {
             const checkClient = new PrismaClient();
             const userCount = await checkClient.user.count().catch(() => 0);
             await checkClient.$disconnect();
-            if (userCount > 0) return res.status(403).json({ error: "System already initialized." });
+            if (userCount > 0) return res.status(403).json({ error: "System already initialized. Please login." });
         }
     }
   } catch(e) { /* Ignore errors on fresh install */ }
 
-  const { dbHost, dbPort, dbUser, dbPassword, dbName, adminEmail, adminPassword } = req.body;
+  const { 
+    dbHost, dbPort, dbUser, dbPassword, dbName,
+    adminEmail, adminPassword 
+  } = req.body;
+
   let tempPrisma: PrismaClient | null = null;
 
   try {
-    // 2. CRITICAL FIX: URL Encode credentials to handle special chars (@, #, etc.)
+    // 2. URL Encode credentials
     const encodedUser = encodeURIComponent(dbUser);
     const encodedPass = encodeURIComponent(dbPassword);
     
@@ -193,10 +218,10 @@ PUPPETEER_EXECUTABLE_PATH="${puppeteerPath}"
 `;
     fs.writeFileSync(envPath, envContent.trim());
 
-    // 4. Locate Schema File (Fixes the "not found" error)
+    // 4. Locate Schema
     const possiblePaths = [
         path.join(process.cwd(), 'prisma', 'schema.prisma'),
-        path.join(__dirname, '..', '..', 'prisma', 'schema.prisma'), 
+        path.join(__dirname, '..', '..', 'prisma', 'schema.prisma'),
         path.join(process.cwd(), 'backend', 'prisma', 'schema.prisma'),
     ];
     const schemaPath = possiblePaths.find(p => fs.existsSync(p));
@@ -205,10 +230,12 @@ PUPPETEER_EXECUTABLE_PATH="${puppeteerPath}"
         throw new Error(`Schema not found. Searched: ${possiblePaths.join(', ')}`);
     }
 
-    // 5. Run Database Schema Push (Use db push instead of migrate)
+    // 5. Run Database Schema Push
+    // FIX: Explicitly use prisma@5.22.0 to avoid v7 breaking changes
     console.log(`Running database setup using schema at: ${schemaPath}`);
+    
     await new Promise<void>((resolve, reject) => {
-        exec(`npx prisma db push --accept-data-loss --schema="${schemaPath}"`, { 
+        exec(`npx prisma@5.22.0 db push --accept-data-loss --schema="${schemaPath}"`, { 
             cwd: process.cwd(),
             env: { ...process.env, DATABASE_URL: dbUrl } 
         }, (error, stdout, stderr) => {
@@ -216,6 +243,7 @@ PUPPETEER_EXECUTABLE_PATH="${puppeteerPath}"
                 console.error(`DB Setup Failed: ${stderr}`);
                 reject(new Error(`Database connection failed: ${stderr}`));
             } else {
+                console.log(`DB Setup Success: ${stdout}`);
                 resolve();
             }
         });
@@ -227,7 +255,7 @@ PUPPETEER_EXECUTABLE_PATH="${puppeteerPath}"
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(adminPassword, salt);
 
-    await tempPrisma.user.create({
+    const user = await tempPrisma.user.create({
         data: {
             email: adminEmail,
             password_hash: hashedPassword,
@@ -243,7 +271,7 @@ PUPPETEER_EXECUTABLE_PATH="${puppeteerPath}"
         ]
     });
     
-    // 8. Success
+    // 8. Success Response
     res.json({ success: true, message: "Setup complete. Restarting system..." });
 
     // 9. Force Restart
@@ -251,7 +279,7 @@ PUPPETEER_EXECUTABLE_PATH="${puppeteerPath}"
     setTimeout(() => { process.exit(0); }, 1000);
 
   } catch (error: any) {
-    console.error("Setup Error:", error);
+    console.error("System Setup Error:", error);
     if (fs.existsSync(envPath)) { try { fs.unlinkSync(envPath); } catch(e) {} }
     res.status(500).json({ error: error.message || "Setup failed. Check database credentials." });
   } finally {

@@ -80,7 +80,8 @@ router.put('/sequence', authorize(['SUDO_ADMIN']), async (req: Request, res: Res
     const month = date.getMonth() + 1;
     const year = date.getFullYear();
     const shortYear = year % 100;
-    const fy = month >= 4 ? `${shortYear}-${shortYear + 1}` : `${shortYear - 1}-${shortYear}`;
+    // UPDATED: Removed hyphen to match new FY format
+    const fy = month >= 4 ? `${shortYear}${shortYear + 1}` : `${shortYear - 1}${shortYear}`;
     const newLastCount = Number(next_number) - 1; 
 
     if (type === 'INVOICE') {

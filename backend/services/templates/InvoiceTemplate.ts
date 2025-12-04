@@ -63,25 +63,22 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any): string => 
       } catch (e) { return '-'; }
     };
 
-    // 3. Image Loader
-    const getBase64Image = (webPath: string) => {
-      if (!webPath) return null;
-      try {
-        const cleanPath = webPath.startsWith('/') ? webPath.slice(1) : webPath;
-        const systemPath = path.resolve(process.cwd(), '../frontend/public', cleanPath);
-        if (fs.existsSync(systemPath)) {
-          const bitmap = fs.readFileSync(systemPath);
-          const ext = path.extname(systemPath).slice(1);
-          const mimeType = ext === 'svg' ? 'svg+xml' : ext;
-          return `data:image/${mimeType};base64,${bitmap.toString('base64')}`;
+	// 3. Image Loader (FIXED: Use Localhost URL instead of file path)
+	const getImageUrl = (webPath: string) => {
+        if (!webPath) return null;
+        // Since we are serving static files from /uploads, we prepend the local backend URL
+        const port = process.env.PORT || 5000;
+        const baseUrl = `http://localhost:${port}`;
+        
+        if (webPath.startsWith('/uploads')) {
+            return `${baseUrl}${webPath}`;
         }
-        return null;
-      } catch (e) { return null; }
+        return webPath; // Return as is if it's already a full URL
     };
 
-    const logoSrc = getBase64Image(profile.logo);
-    const signatureSrc = getBase64Image(profile.signature);
-    const stampSrc = getBase64Image(profile.stamp);
+    const logoSrc = getImageUrl(profile.logo);
+    const signatureSrc = getImageUrl(profile.signature);
+    const stampSrc = getImageUrl(profile.stamp);
 
     // 4. Tax Logic
     let taxRows = '';

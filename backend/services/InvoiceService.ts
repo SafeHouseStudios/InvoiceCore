@@ -18,17 +18,18 @@ interface CreateInvoiceDTO {
 
 export class InvoiceService {
   
-  // Helper: Get Fiscal Year string (e.g., "24-25")
+  // Helper: Get Fiscal Year string (e.g., "2425")
   private static getFiscalYear(date: Date): string {
     const month = date.getMonth() + 1; // 0-indexed
     const year = date.getFullYear();
     const shortYear = year % 100;
 
     // Indian Fiscal Year starts April 1st
+    // UPDATED: Removed hyphen from format (e.g. 2425 instead of 24-25)
     if (month >= 4) {
-      return `${shortYear}-${shortYear + 1}`;
+      return `${shortYear}${shortYear + 1}`;
     } else {
-      return `${shortYear - 1}-${shortYear}`;
+      return `${shortYear - 1}${shortYear}`;
     }
   }
 

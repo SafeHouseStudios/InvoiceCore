@@ -3,8 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import path from 'path';
 
-// Route Imports (Siblings now)
+// Route Imports
 import authRoutes from './routes/authRoutes';
 import clientRoutes from './routes/clientRoutes';
 import invoiceRoutes from './routes/invoiceRoutes';
@@ -34,17 +35,27 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // 2. Middlewares
-app.use(helmet()); 
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" } // Allow images to be loaded by frontend
+})); 
 app.use(cors());   
 app.use(express.json()); 
 app.use(morgan('dev'));  
+
+// --- STATIC FILE SERVING (CRITICAL FIX) ---
+// Serve the frontend uploads directory directly via the backend.
+// This fixes the issue where Next.js Prod build doesn't see new files.
+const rootPath = process.cwd().endsWith('backend') ? '..' : '.';
+const uploadDir = path.join(process.cwd(), rootPath, 'frontend/public/uploads');
+app.use('/uploads', express.static(uploadDir));
+// -------------------------------------------
 
 // 3. Public Routes
 app.use('/api/auth', authRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'active', system: 'InvoiceCore v1.0', mode: 'flat-structure' });
+  res.json({ status: 'active', system: 'InvoiceCore v1.0', mode: 'production-ready' });
 });
 
 // 4. Protected Routes
@@ -73,13 +84,8 @@ app.use('/api/activity', activityRoutes);
 app.listen(PORT, () => {
   console.log(`[InvoiceCore] Server running on port ${PORT}`);
 
-  // FIX: Only run maintenance if the Database URL is actually configured
   if (process.env.DATABASE_URL) {
-      // --- LOG ROTATION TASK ---
-      // Run immediately on startup
       ActivityService.pruneLogs(7);
-
-      // Then run every 24 hours (86400000 ms)
       setInterval(() => {
         console.log("[Cron] Running daily log rotation...");
         ActivityService.pruneLogs(7);
