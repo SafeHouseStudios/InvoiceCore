@@ -15,7 +15,6 @@ import { TemplateSettings } from '@/components/settings/TemplateSettings';
 import { useRole } from "@/hooks/use-role";
 import { useToast } from "@/components/ui/toast-context";
 
-// Defines the main Settings Page component
 export default function SettingsPage() {
   const { isSudo } = useRole(); // True only if SUDO_ADMIN (Owner)
   const { toast } = useToast();
@@ -37,15 +36,17 @@ export default function SettingsPage() {
 
   // Handle Save (Blocked for non-Sudo)
   const handleSaveProfile = async () => {
-    // Show a toast error for non-Sudo attempts
-    if (!isSudo) return toast("Access Denied: Only the Owner can edit settings.", "error");
+    // Corrected: Use simple message/type signature for toast
+    if (!isSudo) return toast("Access Denied: Only the Owner can edit settings.", "error"); 
     
     setLoading(true);
     try { 
       await api.put('/settings/company', profile); 
-      toast("Profile updated successfully!", "success");
+      // Corrected: Use simple message/type signature for toast
+      toast("Profile updated successfully!", "success"); 
     } catch (e) { 
-      toast("Failed to update profile.", "error");
+      // Corrected: Use simple message/type signature for toast
+      toast("Failed to update profile.", "error"); 
     } finally { 
       setLoading(false); 
     }
@@ -53,7 +54,7 @@ export default function SettingsPage() {
 
   // Handle Uploads (Blocked for non-Sudo)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
-    // Show a toast error for non-Sudo attempts
+    // Corrected: Use simple message/type signature for toast
     if (!isSudo) return toast("Access Denied: Only the Owner can upload files.", "error");
     
     const file = e.target.files?.[0];
@@ -65,13 +66,15 @@ export default function SettingsPage() {
     try {
       const res = await api.post('/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       setProfile((prev: any) => ({ ...prev, [field]: res.data.filePath }));
+      // Corrected: Use simple message/type signature for toast
       toast("File uploaded successfully", "success");
     } catch (err) { 
-      toast("Upload failed", "error");
+      // Corrected: Use simple message/type signature for toast
+      toast("Upload failed", "error"); 
     }
   };
 
-  // Read-Only Flag (True for Admins/Users, False for Owner)
+  // Read-Only Flag (True for Admins, False for Owner)
   const isReadOnly = !isSudo;
 
   return (
@@ -98,7 +101,7 @@ export default function SettingsPage() {
             <TabItem value="bank" icon={<Wallet className="w-4 h-4"/>} label="Banking" />
             <TabItem value="email" icon={<Mail className="w-4 h-4"/>} label="Email" />
             <TabItem value="team" icon={<Users className="w-4 h-4"/>} label="Team" />
-            {/* Backup/Data tab is strictly hidden for non-Owners */}
+            {/* Backup is strictly hidden for non-Owners */}
             {isSudo && <TabItem value="backup" icon={<Shield className="w-4 h-4"/>} label="Data" />}
           </TabsList>
         </div>
@@ -110,7 +113,6 @@ export default function SettingsPage() {
         </TabsContent>
         
         <TabsContent value="branding">
-           {/* BrandingSettings will contain the SoftwareNameSetting component */}
            <BrandingSettings profile={profile} handleFileUpload={handleFileUpload} handleSave={handleSaveProfile} loading={loading} disabled={isReadOnly} />
         </TabsContent>
         
@@ -145,8 +147,7 @@ export default function SettingsPage() {
   );
 }
 
-// Helper component for Tab triggers
-function TabItem({ value, icon, label }: { value: string, icon: React.ReactNode, label: string }) {
+function TabItem({ value, icon, label }: any) {
     return (
         <TabsTrigger 
             value={value} 
