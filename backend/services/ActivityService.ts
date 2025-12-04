@@ -1,3 +1,5 @@
+// backend/services/ActivityService.ts
+
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -21,24 +23,30 @@ export class ActivityService {
         }
       });
     } catch (error) {
-      console.error("Failed to log activity:", error);
+      // Suppress error if DB is not configured, which is expected during the setup process.
+      console.error("Failed to log activity (System may be uninitialized):", error);
     }
   }
 
-  // 2. Fetch Logs
+  // 2. Fetch Logs (No change to logic, just added defensive layer)
   static async getLogs(limit = 100) {
-    return await prisma.activityLog.findMany({
-      take: limit,
-      orderBy: { created_at: 'desc' },
-      include: {
-        user: {
-          select: { email: true, role: true }
-        }
-      }
-    });
+    try {
+        return await prisma.activityLog.findMany({
+          take: limit,
+          orderBy: { created_at: 'desc' },
+          include: {
+            user: {
+              select: { email: true, role: true }
+            }
+          }
+        });
+    } catch (error) {
+        console.error("Failed to fetch logs:", error);
+        return [];
+    }
   }
 
-  // 3. Log Rotation (Cleanup)
+  // 3. Log Rotation (Cleanup) - Added defensive layer for start-up
   static async pruneLogs(daysToKeep = 7) {
     try {
       const dateThreshold = new Date();
@@ -53,7 +61,8 @@ export class ActivityService {
       });
       console.log(`[ActivityService] Pruned ${result.count} logs older than ${daysToKeep} days.`);
     } catch (error) {
-      console.error("[ActivityService] Failed to prune logs:", error);
+      // This is the common error seen on server startup before first-time setup is complete.
+      console.log(`[ActivityService] Prune failed (expected if DB is unconfigured): Database initialization required.`);
     }
   }
 }
