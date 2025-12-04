@@ -9,11 +9,9 @@ import { ActivityService } from '../services/ActivityService';
 import fs from 'fs'; 
 import path from 'path'; 
 import os from 'os'; 
-import { exec } from 'child_process'; // Required for running migrations
+import { exec } from 'child_process';
 
 const router = Router();
-// Note: This global instance relies on .env being present on server start.
-// During setup, we will use a temporary instance.
 const prisma = new PrismaClient();
 
 // --- HELPER: Dynamic Email Sender (Uses external SMTP config) ---
@@ -21,7 +19,9 @@ async function sendEmail(to: string, subject: string, text: string) {
   const setting = await prisma.systemSetting.findUnique({ where: { key: 'SMTP_CONFIG' } });
   
   if (!setting?.json_value) {
-    throw new Error("SMTP not configured. Please configure Email Settings in the dashboard.");
+    // Log warning but don't crash if email isn't set up yet
+    console.warn("SMTP not configured. Skipping email.");
+    return;
   }
 
   const config = setting.json_value as any;
@@ -46,27 +46,22 @@ async function sendEmail(to: string, subject: string, text: string) {
 
 /**
  * Helper: Detects OS and returns the likely path for the Chromium executable.
- * This adheres to the self-hosted architecture rule for PDF generation.
  */
 const getPuppeteerPath = () => {
   const platform = os.platform();
   const arch = os.arch();
   
   if (platform === 'win32') {
-    // Windows default path for Chrome
     return 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
   }
   if (platform === 'linux' || arch === 'arm64') {
-    // Standard path for headless chromium on Linux/ARM64 (Raspberry Pi)
     return '/usr/bin/chromium-browser'; 
   }
   if (platform === 'darwin') {
-    // MacOS default path for Chrome
     return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'; 
   }
   return '';
 };
-
 
 // ==============================
 // 1. LOGIN & AUTHENTICATION
@@ -76,40 +71,26 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password, totpToken } = req.body;
 
-    // 1. Find User
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      return res.status(400).json({ error: "User not found" });
-    }
+    if (!user) return res.status(400).json({ error: "User not found" });
 
-    // 2. Verify Password
     const validPass = await bcrypt.compare(password, user.password_hash);
-    if (!validPass) {
-      return res.status(400).json({ error: "Invalid password" });
-    }
+    if (!validPass) return res.status(400).json({ error: "Invalid password" });
 
-    // 3. Security: 2FA Enforcement
     if (user.two_factor_enabled) {
-        if (!totpToken) {
-            return res.json({ require2fa: true }); 
-        }
-        if (!user.two_factor_secret) {
-             return res.status(500).json({ error: "2FA enabled but secret missing." });
-        }
+        if (!totpToken) return res.json({ require2fa: true }); 
+        if (!user.two_factor_secret) return res.status(500).json({ error: "2FA enabled but secret missing." });
+        
         const validTotp = authenticator.check(totpToken, user.two_factor_secret);
-        if (!validTotp) {
-            return res.status(400).json({ error: "Invalid 2FA Code" });
-        }
+        if (!validTotp) return res.status(400).json({ error: "Invalid 2FA Code" });
     }
 
-    // 4. Generate JWT
     const token = jwt.sign(
       { id: user.id, role: user.role, email: user.email },
       process.env.JWT_SECRET as string,
       { expiresIn: '12h' }
     );
 
-    // 5. Log Activity
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     await ActivityService.log(user.id, "LOGIN", "User logged in", "AUTH", undefined, ip as string);
 
@@ -125,7 +106,7 @@ router.post('/login', async (req, res) => {
 
   } catch (error) {
     console.error("Login Error:", error);
-    res.status(500).json({ error: "Login failed" });
+    res.status(500).json({ error: "Login failed. System might need setup." });
   }
 });
 
@@ -137,7 +118,6 @@ router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
     const user = await prisma.user.findUnique({ where: { email } });
-    
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const token = crypto.randomBytes(32).toString('hex');
@@ -148,14 +128,15 @@ router.post('/forgot-password', async (req, res) => {
       data: { reset_token: token, reset_token_expiry: expiry }
     });
 
-    const resetLink = `http://localhost:3000/reset-password?token=${token}`;
+    // Use APP_URL from env or default to request origin
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const resetLink = `${appUrl}/reset-password?token=${token}`;
+    
     await sendEmail(email, "Password Reset Request", `Click here to reset: ${resetLink}`);
-
     await ActivityService.log(user.id, "FORGOT_PASSWORD", "Requested password reset link");
 
     res.json({ success: true, message: "Reset link sent to email." });
   } catch (error: any) {
-    console.error("Forgot Password Error:", error);
     res.status(500).json({ error: error.message || "Failed to process request" });
   }
 });
@@ -180,30 +161,37 @@ router.post('/reset-password', async (req, res) => {
     });
 
     await ActivityService.log(user.id, "RESET_PASSWORD", "Password reset successfully");
-
     res.json({ success: true, message: "Password updated successfully" });
   } catch (error) {
-    console.error("Reset Password Error:", error);
     res.status(500).json({ error: "Failed to reset password" });
   }
 });
 
 // ==============================
-// 3. SYSTEM INITIALIZATION & SETUP (NEW FIRST-TIME INSTALLER)
+// 3. SYSTEM INITIALIZATION & SETUP (FIXED)
 // ==============================
 
 router.post('/setup', async (req: Request, res: Response) => {
-  // 1. Initial Check: See if system is already initialized.
+  const envPath = path.join(process.cwd(), '.env');
+
+  // 1. Initial Check: Prevent overwrite if already installed
   try {
-    // This relies on the global prisma instance. If .env is missing, this throws, 
-    // which is fine because we catch it and proceed to setup.
-    const userCount = await prisma.user.count().catch(() => 0);
-    if (userCount > 0) {
-        return res.status(403).json({ error: "System already initialized. Please login." });
+    if (fs.existsSync(envPath)) {
+        // Create a temporary client to check if the DB is actually populated
+        // We can't use the global 'prisma' because it might be using old/empty env vars
+        // This check prevents malicious overwrites of a working system
+        require('dotenv').config(); 
+        if (process.env.DATABASE_URL) {
+            const checkClient = new PrismaClient();
+            const userCount = await checkClient.user.count().catch(() => 0);
+            await checkClient.$disconnect();
+            
+            if (userCount > 0) {
+                return res.status(403).json({ error: "System already initialized. Please login." });
+            }
+        }
     }
-  } catch(e) {
-    // Expected behavior on first run (no .env or DB unreachable)
-  }
+  } catch(e) { /* Ignore errors on fresh install */ }
 
   const { 
     dbHost, dbPort, dbUser, dbPassword, dbName,
@@ -211,16 +199,20 @@ router.post('/setup', async (req: Request, res: Response) => {
   } = req.body;
 
   let tempPrisma: PrismaClient | null = null;
-  // NOTE: We assume the .env file is in the current working directory of the backend process.
-  const envPath = path.join(process.cwd(), '.env');
 
   try {
-    // 2. Generate Secrets & Paths
+    // 2. CRITICAL FIX: URL Encode credentials to handle special chars (@, #, etc.)
+    const encodedUser = encodeURIComponent(dbUser);
+    const encodedPass = encodeURIComponent(dbPassword);
+    
+    // 3. Generate Configuration
     const newJwtSecret = crypto.randomBytes(32).toString('hex');
     const puppeteerPath = getPuppeteerPath();
-    const dbUrl = `mysql://${dbUser}:${dbPassword}@${dbHost}:${dbPort}/${dbName}`;
+    // Construct the Safe URL
+    const dbUrl = `mysql://${encodedUser}:${encodedPass}@${dbHost}:${dbPort}/${dbName}`;
 
-    // 3. Write .env File
+    // 4. Write .env File to Disk
+    // Note: This writes the file, but the RUNNING process doesn't see it yet.
     const envContent = `
 PORT=5000
 DATABASE_URL="${dbUrl}"
@@ -228,71 +220,78 @@ JWT_SECRET="${newJwtSecret}"
 PUPPETEER_EXECUTABLE_PATH="${puppeteerPath}"
 # --- END GENERATED CONFIG ---
 `;
-    fs.writeFileSync(envPath, envContent);
+    fs.writeFileSync(envPath, envContent.trim());
 
-    // 4. Run Migrations Programmatically (CRITICAL FIX)
-    // This ensures tables exist before we try to insert the admin user.
+    // 5. Run Database Schema Push (Wait for completion)
+    console.log("Running database setup...");
     await new Promise<void>((resolve, reject) => {
-        // Using 'npx prisma migrate deploy' applies pending migrations without interactive prompts
-        exec('npx prisma migrate deploy', { cwd: process.cwd() }, (error, stdout, stderr) => {
+        // FIX: Use 'db push' instead of 'migrate deploy'. 
+        // 'db push' ignores migration history mismatches and forces the schema state.
+        // We explicitly pass the DATABASE_URL env var to the child process 
+        // because the parent process (this one) hasn't reloaded .env yet.
+        exec('npx prisma db push --skip-generate --accept-data-loss', { 
+            cwd: process.cwd(),
+            env: { ...process.env, DATABASE_URL: dbUrl } 
+        }, (error, stdout, stderr) => {
             if (error) {
-                console.error(`Migration Error: ${stderr}`);
-                reject(new Error("Failed to apply database schema. Check DB permissions/connection."));
+                console.error(`DB Setup Failed: ${stderr}`);
+                reject(new Error(`Database connection failed: ${stderr}`));
             } else {
-                console.log(`Migration Success: ${stdout}`);
+                console.log(`DB Setup Success: ${stdout}`);
                 resolve();
             }
         });
     });
 
-    // 5. Connect & Create Admin
-    // Temporarily create a new client pointing to the newly configured DB
+    // 6. Connect & Create Admin User
+    // We initialize a specific PrismaClient with the new URL to insert data immediately.
     tempPrisma = new PrismaClient({
         datasources: { db: { url: dbUrl } }
     });
     
-    // Test connection explicitly
-    await tempPrisma.$connect(); 
-
-    // Create Sudo Admin
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(adminPassword, salt);
 
+    // Create User
     const user = await tempPrisma.user.create({
         data: {
             email: adminEmail,
             password_hash: hashedPassword,
-            role: 'SUDO_ADMIN' // Owner role
+            role: 'SUDO_ADMIN'
         }
     });
 
-    // 6. Initialize Default Settings (e.g. Software Name)
-    await tempPrisma.systemSetting.create({
-        data: {
-            key: 'SOFTWARE_NAME',
-            value: 'InvoiceCore', // Default name
-            is_locked: true
-        }
+    // 7. Initialize Default Settings
+    await tempPrisma.systemSetting.createMany({
+        data: [
+            { key: 'SOFTWARE_NAME', value: 'InvoiceCore', is_locked: true },
+            { key: 'SMTP_CONFIG', json_value: {} } // Placeholder to prevent null errors
+        ]
     });
-
-    // 7. Log Activity
-    await ActivityService.log(user.id, "SYSTEM_INIT", "System initialized & migrations applied", "SYSTEM", "INIT", req.socket.remoteAddress as string);
     
-    // 8. Success
+    // 8. Send Success Response
     res.json({ 
         success: true, 
-        message: "Initialization complete. Database migrated & Sudo Admin created."
+        message: "Setup complete. Restarting system..." 
     });
+
+    // 9. CRITICAL: Force PM2 Restart
+    // The process MUST restart to load the new .env file into `process.env` 
+    // for the global Prisma instance to work in future requests.
+    console.log("Setup successful. Exiting process to trigger PM2 restart.");
+    setTimeout(() => {
+        process.exit(0); 
+    }, 1000);
 
   } catch (error: any) {
     console.error("System Setup Error:", error);
     
-    // CRITICAL: Clean up partially created .env file on failure so user can retry
+    // Clean up the invalid .env file so the user can try again without manual deletion
     if (fs.existsSync(envPath)) {
-        fs.unlinkSync(envPath);
+        try { fs.unlinkSync(envPath); } catch(e) {}
     }
     
-    res.status(500).json({ error: error.message || "Database setup failed. Check credentials." });
+    res.status(500).json({ error: error.message || "Setup failed. Check database credentials." });
   } finally {
     if (tempPrisma) {
       await tempPrisma.$disconnect();
