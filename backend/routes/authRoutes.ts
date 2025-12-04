@@ -1,4 +1,6 @@
-import { Router } from 'express';
+// backend/routes/authRoutes.ts
+
+import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
@@ -6,11 +8,14 @@ import { authenticator } from 'otplib';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import { ActivityService } from '../services/ActivityService';
+import fs from 'fs'; 
+import path from 'path'; 
+import os from 'os'; 
 
 const router = Router();
 const prisma = new PrismaClient();
 
-// --- HELPER: Dynamic Email Sender ---
+// --- HELPER: Dynamic Email Sender (Uses external SMTP config) ---
 async function sendEmail(to: string, subject: string, text: string) {
   const setting = await prisma.systemSetting.findUnique({ where: { key: 'SMTP_CONFIG' } });
   
@@ -37,6 +42,30 @@ async function sendEmail(to: string, subject: string, text: string) {
     text 
   });
 }
+
+/**
+ * Helper: Detects OS and returns the likely path for the Chromium executable.
+ * This adheres to the self-hosted architecture rule for PDF generation.
+ */
+const getPuppeteerPath = () => {
+  const platform = os.platform();
+  const arch = os.arch();
+  
+  if (platform === 'win32') {
+    // Windows default path for Chrome
+    return 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+  }
+  if (platform === 'linux' || arch === 'arm64') {
+    // Standard path for headless chromium on Linux/ARM64 (Raspberry Pi)
+    return '/usr/bin/chromium-browser'; 
+  }
+  if (platform === 'darwin') {
+    // MacOS default path for Chrome
+    return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'; 
+  }
+  return '';
+};
+
 
 // ==============================
 // 1. LOGIN & AUTHENTICATION
@@ -159,36 +188,89 @@ router.post('/reset-password', async (req, res) => {
 });
 
 // ==============================
-// 3. SETUP & UTILS
+// 3. SYSTEM INITIALIZATION & SETUP (NEW FIRST-TIME INSTALLER)
 // ==============================
 
-// POST: Initial Admin Setup
-router.post('/register-admin', async (req, res) => {
+router.post('/setup', async (req: Request, res: Response) => {
+  // 1. Initial Check: See if a user exists. If so, system is initialized.
   try {
-    const { email, password } = req.body;
-    
+    // Uses the default prisma instance (which may fail if .env is missing/wrong)
     const userCount = await prisma.user.count();
     if (userCount > 0) {
-        return res.status(403).json({ error: "System already initialized." });
+        return res.status(403).json({ error: "System already initialized. Please login." });
     }
+  } catch(e) {
+    // Ignore error, proceed to setup if we can't connect/count users.
+  }
 
+  const { 
+    dbHost, dbPort, dbUser, dbPassword, dbName,
+    adminEmail, adminPassword 
+  } = req.body;
+
+  let tempPrisma: PrismaClient | null = null;
+  // NOTE: We assume the .env file is in the current working directory of the backend process.
+  const envPath = path.join(process.cwd(), '.env');
+
+  try {
+    // 2. Generate Secrets & Paths
+    const newJwtSecret = crypto.randomBytes(32).toString('hex');
+    const puppeteerPath = getPuppeteerPath();
+    const dbUrl = `mysql://${dbUser}:${dbPassword}@${dbHost}:${dbPort}/${dbName}`;
+
+    // 3. Write .env File
+    const envContent = `
+PORT=5000
+DATABASE_URL="${dbUrl}"
+JWT_SECRET="${newJwtSecret}"
+PUPPETEER_EXECUTABLE_PATH="${puppeteerPath}"
+# --- END GENERATED CONFIG ---
+`;
+    fs.writeFileSync(envPath, envContent);
+
+    // 4. Test Connection & Create Sudo Admin
+    // Temporarily create a new client pointing to the user's DB configuration
+    tempPrisma = new PrismaClient({
+        datasources: { db: { url: dbUrl } }
+    });
+    
+    // Test connection with new credentials (connect is synchronous, fails on invalid creds)
+    await tempPrisma.$connect(); 
+
+    // Create Sudo Admin
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(adminPassword, salt);
 
-    // Create the SUPER ADMIN (Owner)
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password_hash: hashedPassword,
-        role: 'SUDO_ADMIN' // <--- Changed from ADMIN
-      }
+    const user = await tempPrisma.user.create({
+        data: {
+            email: adminEmail,
+            password_hash: hashedPassword,
+            role: 'SUDO_ADMIN' // Owner role
+        }
     });
 
-    res.json({ message: "System initialized. Sudo Admin created.", userId: user.id });
-  } catch (error) {
-    console.error("Registration Error:", error);
-    res.status(500).json({ error: "Initialization failed" });
+    // 5. Log Activity
+    await ActivityService.log(user.id, "SYSTEM_INIT", "First-time system initialization and admin creation", "SYSTEM", "INIT", req.socket.remoteAddress as string);
+    
+    // 6. Success
+    res.json({ 
+        success: true, 
+        message: "Initialization complete. Sudo Admin User created."
+    });
+
+  } catch (error: any) {
+    console.error("System Setup Error:", error);
+    // CRITICAL: Clean up partially created .env file on failure
+    if (fs.existsSync(envPath)) {
+        fs.unlinkSync(envPath);
+    }
+    res.status(500).json({ error: "Database setup failed. Check credentials and ensure MySQL is running." });
+  } finally {
+    if (tempPrisma) {
+      await tempPrisma.$disconnect();
+    }
   }
 });
+
 
 export default router;

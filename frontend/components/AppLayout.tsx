@@ -1,3 +1,5 @@
+// frontend/components/AppLayout.tsx
+
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -15,7 +17,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // Define routes that should NOT have the Sidebar/Navbar
   const isAuthPage = pathname === "/login" || 
                      pathname?.startsWith("/forgot-password") || 
-                     pathname?.startsWith("/reset-password");
+                     pathname?.startsWith("/reset-password") ||
+                     pathname === "/setup"; // ADDED: Allow access to the setup installer
 
   useEffect(() => {
     // Check for token in LocalStorage
@@ -30,7 +33,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             setIsChecking(false);
         }
     } else {
-        // On auth page -> Allow access immediately
+        // On auth or setup page -> Allow access immediately
         setIsChecking(false);
     }
   }, [pathname, isAuthPage, router]);
@@ -44,7 +47,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       );
   }
 
-  // 1. Auth Page Layout (Clean, Centered Content)
+  // 1. Auth/Setup Page Layout (Clean, Centered Content)
   if (isAuthPage) {
     return (
         <div className="flex-1 flex flex-col h-screen w-full overflow-hidden relative z-10">
