@@ -1,5 +1,3 @@
-// backend/routes/authRoutes.ts
-
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
@@ -11,9 +9,11 @@ import { ActivityService } from '../services/ActivityService';
 import fs from 'fs'; 
 import path from 'path'; 
 import os from 'os'; 
+import { exec } from 'child_process'; // Required for running migrations
 
 const router = Router();
 // Note: This global instance relies on .env being present on server start.
+// During setup, we will use a temporary instance.
 const prisma = new PrismaClient();
 
 // --- HELPER: Dynamic Email Sender (Uses external SMTP config) ---
@@ -193,15 +193,16 @@ router.post('/reset-password', async (req, res) => {
 // ==============================
 
 router.post('/setup', async (req: Request, res: Response) => {
-  // 1. Initial Check: See if a user exists. If so, system is initialized.
+  // 1. Initial Check: See if system is already initialized.
   try {
-    // This relies on the global prisma instance which might be configured from the previous run or a temporary check.
-    const userCount = await prisma.user.count();
+    // This relies on the global prisma instance. If .env is missing, this throws, 
+    // which is fine because we catch it and proceed to setup.
+    const userCount = await prisma.user.count().catch(() => 0);
     if (userCount > 0) {
         return res.status(403).json({ error: "System already initialized. Please login." });
     }
   } catch(e) {
-    // Expected to fail if no .env or DB is running, which is fine for setup.
+    // Expected behavior on first run (no .env or DB unreachable)
   }
 
   const { 
@@ -229,13 +230,29 @@ PUPPETEER_EXECUTABLE_PATH="${puppeteerPath}"
 `;
     fs.writeFileSync(envPath, envContent);
 
-    // 4. Test Connection & Create Sudo Admin
-    // Temporarily create a new client pointing to the user's DB configuration
+    // 4. Run Migrations Programmatically (CRITICAL FIX)
+    // This ensures tables exist before we try to insert the admin user.
+    await new Promise<void>((resolve, reject) => {
+        // Using 'npx prisma migrate deploy' applies pending migrations without interactive prompts
+        exec('npx prisma migrate deploy', { cwd: process.cwd() }, (error, stdout, stderr) => {
+            if (error) {
+                console.error(`Migration Error: ${stderr}`);
+                reject(new Error("Failed to apply database schema. Check DB permissions/connection."));
+            } else {
+                console.log(`Migration Success: ${stdout}`);
+                resolve();
+            }
+        });
+    });
+
+    // 5. Connect & Create Admin
+    // Temporarily create a new client pointing to the newly configured DB
     tempPrisma = new PrismaClient({
         datasources: { db: { url: dbUrl } }
     });
     
-    await tempPrisma.$connect(); // Test connection with new credentials
+    // Test connection explicitly
+    await tempPrisma.$connect(); 
 
     // Create Sudo Admin
     const salt = await bcrypt.genSalt(10);
@@ -249,7 +266,7 @@ PUPPETEER_EXECUTABLE_PATH="${puppeteerPath}"
         }
     });
 
-    // ADDED: Initialize the software name setting (Requirement for new feature)
+    // 6. Initialize Default Settings (e.g. Software Name)
     await tempPrisma.systemSetting.create({
         data: {
             key: 'SOFTWARE_NAME',
@@ -258,29 +275,29 @@ PUPPETEER_EXECUTABLE_PATH="${puppeteerPath}"
         }
     });
 
-    // 5. Log Activity
-    // Use the user.id from the newly created user for logging
-    await ActivityService.log(user.id, "SYSTEM_INIT", "First-time system initialization and admin creation", "SYSTEM", "INIT", req.socket.remoteAddress as string);
+    // 7. Log Activity
+    await ActivityService.log(user.id, "SYSTEM_INIT", "System initialized & migrations applied", "SYSTEM", "INIT", req.socket.remoteAddress as string);
     
-    // 6. Success
+    // 8. Success
     res.json({ 
         success: true, 
-        message: "Initialization complete. Sudo Admin User created."
+        message: "Initialization complete. Database migrated & Sudo Admin created."
     });
 
   } catch (error: any) {
     console.error("System Setup Error:", error);
-    // CRITICAL: Clean up partially created .env file on failure
+    
+    // CRITICAL: Clean up partially created .env file on failure so user can retry
     if (fs.existsSync(envPath)) {
         fs.unlinkSync(envPath);
     }
-    res.status(500).json({ error: error.message || "Database setup failed. Check credentials and ensure MySQL is running." });
+    
+    res.status(500).json({ error: error.message || "Database setup failed. Check credentials." });
   } finally {
     if (tempPrisma) {
       await tempPrisma.$disconnect();
     }
   }
 });
-
 
 export default router;
