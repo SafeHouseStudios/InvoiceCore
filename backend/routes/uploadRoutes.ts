@@ -5,8 +5,17 @@ import fs from 'fs';
 
 const router = Router();
 
-// Define Path: ../frontend/public/uploads
-const uploadDir = path.join(process.cwd(), '../frontend/public/uploads');
+// --- FIXED PATH RESOLUTION ---
+// Detect if we are running from the 'backend' folder or the 'project root'
+// If current directory ends in 'backend', go up one level (..).
+// Otherwise (running from root), stay here (.).
+const rootPath = process.cwd().endsWith('backend') ? '..' : '.';
+
+// Construct the absolute path to frontend/public/uploads
+const uploadDir = path.join(process.cwd(), rootPath, 'frontend/public/uploads');
+// -----------------------------
+
+console.log(`[Uploads] Saving files to: ${uploadDir}`); // Helpful for debugging
 
 // Ensure directory exists
 if (!fs.existsSync(uploadDir)) {
