@@ -5,10 +5,17 @@ import { AuthRequest, authorize } from '../middleware/authMiddleware';
 
 const router = Router();
 
+// --- FIX: ADDED TRY/CATCH ---
 router.get('/', async (req, res) => {
-  const accounts = await BankService.getAllAccounts();
-  res.json(accounts);
+  try {
+    const accounts = await BankService.getAllAccounts();
+    res.json(accounts);
+  } catch (e) {
+    console.error("Failed to fetch banks:", e);
+    res.status(500).json({ error: "Failed to fetch bank accounts" });
+  }
 });
+// -----------------------------
 
 router.post('/', authorize(['SUDO_ADMIN', 'ADMIN']), async (req: Request, res: Response) => {
   try {

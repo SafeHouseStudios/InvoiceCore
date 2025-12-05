@@ -6,25 +6,30 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { 
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
 } from "@/components/ui/select";
 import { 
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Textarea } from "@/components/ui/textarea";
 import { 
-  Plus, FileText, Loader2, Trash2, Eye, Pencil, Search, Filter, Calendar as CalendarIcon, Save, X 
+  Plus, FileText, Loader2, Trash2, Eye, Pencil, Search, Filter, Calendar as CalendarIcon, X 
 } from "lucide-react";
 import Link from "next/link";
 import { format, isWithinInterval, startOfDay, endOfDay } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { DateRange } from "react-day-picker";
-import { QuotationItemsTable, QuoteItem } from "./new/quotation-items";
+
+// Types
+interface QuoteItem {
+  description: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+}
 
 interface Quotation {
   id: number;
@@ -33,13 +38,12 @@ interface Quotation {
   expiry_date?: string;
   grand_total: string;
   subtotal: string;
-  status: string;
   client: { 
     company_name: string;
     email?: string;
     phone?: string;
   };
-  line_items: QuoteItem[];
+  line_items: QuoteItem[] | string; // Handle potentially stringified JSON
   services_offered?: string;
   contract_terms?: string;
   remarks?: string;
@@ -48,42 +52,22 @@ interface Quotation {
 export default function QuotationListPage() {
   const [quotes, setQuotes] = useState<Quotation[]>([]);
   const [filteredQuotes, setFilteredQuotes] = useState<Quotation[]>([]);
-  const [clients, setClients] = useState<any[]>([]); 
   const [loading, setLoading] = useState(true);
   
-  // --- VIEWPORT STATE ---
+  // --- VIEW MODAL STATE (Kept for quick look) ---
   const [selectedQuote, setSelectedQuote] = useState<Quotation | null>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
 
-  // --- CREATE MODAL STATE ---
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  
-  // Create Form Data
-  const [newIssueDate, setNewIssueDate] = useState<Date | undefined>(new Date());
-  const [selectedClientId, setSelectedClientId] = useState<string>("");
-  const [newItems, setNewItems] = useState<QuoteItem[]>([{ id: 1, description: "", hsn: "", quantity: 1, rate: 0, amount: 0 }]);
-  const [newServices, setNewServices] = useState("");
-  const [newTerms, setNewTerms] = useState("");
-  const [newRemarks, setNewRemarks] = useState("");
-  const [newSubtotal, setNewSubtotal] = useState(0);
-  const [newGrandTotal, setNewGrandTotal] = useState(0);
-
   // --- FILTER STATE ---
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   // --- 1. FETCH DATA ---
   const fetchData = async () => {
     try {
-      const [quotesRes, clientsRes] = await Promise.all([
-          api.get('/quotations'),
-          api.get('/clients')
-      ]);
-      setQuotes(quotesRes.data);
-      setFilteredQuotes(quotesRes.data);
-      setClients(clientsRes.data);
+      const res = await api.get('/quotations');
+      setQuotes(res.data);
+      setFilteredQuotes(res.data);
     } catch (err) {
       console.error("Failed to load data", err);
     } finally {
@@ -95,14 +79,7 @@ export default function QuotationListPage() {
     fetchData();
   }, []);
 
-  // --- 2. CALCULATIONS (For Create Modal) ---
-  useEffect(() => {
-    const sub = newItems.reduce((sum, item) => sum + item.amount, 0);
-    setNewSubtotal(sub);
-    setNewGrandTotal(sub); 
-  }, [newItems]);
-
-  // --- 3. FILTER LOGIC ---
+  // --- 2. FILTER LOGIC ---
   useEffect(() => {
     let temp = quotes;
 
@@ -114,12 +91,6 @@ export default function QuotationListPage() {
             q.client.company_name.toLowerCase().includes(lower)
         );
     }
-
-    // Status
-    if (statusFilter !== "ALL") {
-        temp = temp.filter(q => q.status === statusFilter);
-    }
-
     // Date Range (Calendar)
     if (dateRange?.from) {
         temp = temp.filter(q => {
@@ -131,39 +102,9 @@ export default function QuotationListPage() {
     }
 
     setFilteredQuotes(temp);
-  }, [quotes, searchTerm, statusFilter, dateRange]);
+  }, [quotes, searchTerm, dateRange]);
 
-  // --- 4. ACTION HANDLERS ---
-
-  const handleCreate = async () => {
-      if (!selectedClientId) return alert("Please select a Client");
-      if (newItems.length === 0 || newSubtotal === 0) return alert("Please add items");
-
-      setIsSaving(true);
-      try {
-          const payload = {
-              clientId: Number(selectedClientId),
-              issueDate: newIssueDate?.toISOString(),
-              items: newItems,
-              subtotal: newSubtotal,
-              grandTotal: newGrandTotal,
-              servicesOffered: newServices,
-              contractTerms: newTerms,
-              remarks: newRemarks
-          };
-          await api.post('/quotations', payload);
-          setIsCreateOpen(false);
-          // Reset Form
-          setNewItems([{ id: Date.now(), description: "", hsn: "", quantity: 1, rate: 0, amount: 0 }]);
-          setSelectedClientId("");
-          setNewServices(""); setNewTerms(""); setNewRemarks("");
-          fetchData(); // Refresh List
-      } catch (e) {
-          alert("Failed to create quotation");
-      } finally {
-          setIsSaving(false);
-      }
-  };
+  // --- 3. ACTIONS ---
 
   const handleDelete = async (id: number) => {
       if (!confirm("Delete this quotation?")) return;
@@ -176,7 +117,12 @@ export default function QuotationListPage() {
   };
 
   const openView = (quote: Quotation) => {
-      setSelectedQuote(quote);
+      // Parse items if they come as a JSON string from DB
+      const parsedItems = typeof quote.line_items === 'string' 
+          ? JSON.parse(quote.line_items) 
+          : quote.line_items;
+      
+      setSelectedQuote({ ...quote, line_items: parsedItems });
       setIsViewOpen(true);
   };
 
@@ -194,78 +140,12 @@ export default function QuotationListPage() {
           <p className="text-muted-foreground">Manage estimates and proposals</p>
         </div>
         
-        {/* CREATE MODAL TRIGGER */}
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-                <Button className="bg-primary text-white shadow-lg shadow-primary/25 hover:bg-primary/90">
-                    <Plus className="w-4 h-4 mr-2" /> Create Quote
-                </Button>
-            </DialogTrigger>
-            
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle>New Quotation</DialogTitle>
-                    <DialogDescription>Create a new proposal for your client.</DialogDescription>
-                </DialogHeader>
-                
-                <div className="grid gap-6 py-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>Client</Label>
-                            <select 
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                value={selectedClientId}
-                                onChange={(e) => setSelectedClientId(e.target.value)}
-                            >
-                                <option value="">Select Client...</option>
-                                {clients.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
-                            </select>
-                        </div>
-                        <div className="space-y-2 flex flex-col">
-                            <Label>Issue Date</Label>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" className="w-full pl-3 text-left font-normal">
-                                        {newIssueDate ? format(newIssueDate, "PPP") : <span>Pick a date</span>}
-                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar mode="single" selected={newIssueDate} onSelect={setNewIssueDate} initialFocus />
-                                </PopoverContent>
-                            </Popover>
-                        </div>
-                    </div>
-
-                    {/* ITEMS TABLE */}
-                    <div className="border rounded-lg p-4 bg-slate-50 dark:bg-slate-900/50">
-                        <Label className="mb-2 block">Bill of Quantities</Label>
-                        <QuotationItemsTable items={newItems} setItems={setNewItems} />
-                        <div className="flex justify-end mt-4 text-lg font-bold text-primary">
-                            Total: {formatCurrency(newGrandTotal)}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>Services Offered</Label>
-                            <Textarea placeholder="Scope of work..." value={newServices} onChange={e => setNewServices(e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Terms / Duration</Label>
-                            <Textarea placeholder="e.g. 12 Months" value={newTerms} onChange={e => setNewTerms(e.target.value)} />
-                        </div>
-                    </div>
-                </div>
-
-                <DialogFooter>
-                    <Button onClick={handleCreate} disabled={isSaving}>
-                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                        Save Quote
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+        {/* REDIRECTS TO NEW PAGE */}
+        <Link href="/quotations/new">
+            <Button className="bg-primary text-white shadow-lg shadow-primary/25 hover:bg-primary/90">
+                <Plus className="w-4 h-4 mr-2" /> Create Quote
+            </Button>
+        </Link>
       </div>
 
       {/* FILTERS BAR */}
@@ -275,25 +155,11 @@ export default function QuotationListPage() {
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input 
                 placeholder="Search Quote # or Client..." 
-                className="pl-9" 
+                className="pl-9 bg-background" 
                 value={searchTerm} 
                 onChange={e => setSearchTerm(e.target.value)} 
               />
           </div>
-
-          {/* Status */}
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[160px]">
-                  <Filter className="w-4 h-4 mr-2 text-muted-foreground"/> 
-                  <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                  <SelectItem value="ALL">All Status</SelectItem>
-                  <SelectItem value="DRAFT">Draft</SelectItem>
-                  <SelectItem value="SENT">Sent</SelectItem>
-                  <SelectItem value="ACCEPTED">Accepted</SelectItem>
-              </SelectContent>
-          </Select>
           
           {/* Date Range Picker */}
           <div className="flex items-center gap-2">
@@ -343,7 +209,6 @@ export default function QuotationListPage() {
                   <TableHead>Client</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -358,25 +223,21 @@ export default function QuotationListPage() {
                     <TableCell className="font-medium text-muted-foreground">{q.client?.company_name}</TableCell>
                     <TableCell>{format(new Date(q.issue_date), "dd MMM yyyy")}</TableCell>
                     <TableCell className="font-bold text-foreground">{formatCurrency(q.grand_total)}</TableCell>
-                    <TableCell>
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide border
-                        ${q.status === 'ACCEPTED' ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400' : ''}
-                        ${q.status === 'SENT' ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400' : ''}
-                        ${q.status === 'DRAFT' ? 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-400' : ''}
-                      `}>{q.status}</span>
-                    </TableCell>
                     
-                    {/* RESTRICTED ACTIONS: VIEW, EDIT, DELETE ONLY */}
                     <TableCell className="text-right">
                        <div className="flex justify-end items-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-primary rounded-full" onClick={() => openView(q)} title="View Details">
+                          {/* Quick View */}
+                          <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-primary rounded-full" onClick={() => openView(q)} title="Quick View">
                             <Eye className="w-4 h-4"/>
                           </Button>
+                          
+                          {/* Edit Page Link */}
                           <Link href={`/quotations/${q.id}`}>
                             <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-blue-500 rounded-full" title="Edit">
                                 <Pencil className="w-4 h-4"/>
                             </Button>
                           </Link>
+                          
                           <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-red-500 rounded-full" onClick={() => handleDelete(q.id)} title="Delete">
                               <Trash2 className="w-4 h-4"/>
                           </Button>
@@ -390,7 +251,7 @@ export default function QuotationListPage() {
         </CardContent>
       </Card>
 
-      {/* === VIEWPORT MODAL === */}
+      {/* === VIEW ONLY MODAL (PRESERVED) === */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-card border-border shadow-2xl">
             <DialogHeader>
@@ -403,9 +264,6 @@ export default function QuotationListPage() {
                             Issued on {selectedQuote && format(new Date(selectedQuote.issue_date), "dd MMMM yyyy")}
                         </DialogDescription>
                     </div>
-                    <Badge variant="outline" className="text-sm px-3 py-1 uppercase">
-                        {selectedQuote?.status}
-                    </Badge>
                 </div>
             </DialogHeader>
 
@@ -430,7 +288,7 @@ export default function QuotationListPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {selectedQuote.line_items.map((item, idx) => (
+                                    {(Array.isArray(selectedQuote.line_items) ? selectedQuote.line_items : []).map((item, idx) => (
                                         <TableRow key={idx}>
                                             <TableCell className="font-medium">{item.description}</TableCell>
                                             <TableCell className="text-right">{item.quantity}</TableCell>
@@ -444,8 +302,8 @@ export default function QuotationListPage() {
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2"><h4 className="text-sm font-bold">Services</h4><div className="p-3 bg-muted/20 rounded-lg text-sm min-h-[80px]">{selectedQuote.services_offered || "N/A"}</div></div>
-                        <div className="space-y-2"><h4 className="text-sm font-bold">Terms</h4><div className="p-3 bg-muted/20 rounded-lg text-sm min-h-[80px]">{selectedQuote.contract_terms || "N/A"}</div></div>
+                        <div className="space-y-2"><h4 className="text-sm font-bold">Services</h4><div className="p-3 bg-muted/20 rounded-lg text-sm min-h-[80px] whitespace-pre-wrap">{selectedQuote.services_offered || "N/A"}</div></div>
+                        <div className="space-y-2"><h4 className="text-sm font-bold">Terms</h4><div className="p-3 bg-muted/20 rounded-lg text-sm min-h-[80px] whitespace-pre-wrap">{selectedQuote.contract_terms || "N/A"}</div></div>
                     </div>
                 </div>
             )}

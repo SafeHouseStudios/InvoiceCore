@@ -27,9 +27,12 @@ export default function NewInvoicePage() {
   const [remarks, setRemarks] = useState("");
 
   const [clients, setClients] = useState<any[]>([]);
-  const [banks, setBanks] = useState<any[]>([]); // Bank Accounts
+  const [banks, setBanks] = useState<any[]>([]); 
   const [selectedClientId, setSelectedClientId] = useState<string>("");
-  const [selectedBankId, setSelectedBankId] = useState<string>(""); // Selected Bank
+  const [selectedBankId, setSelectedBankId] = useState<string>("");
+  
+  // NEW: Currency State
+  const [currency, setCurrency] = useState("INR");
 
   const [isCalculating, setIsCalculating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -54,15 +57,27 @@ export default function NewInvoicePage() {
             setClients(clientsRes.data);
             setBanks(banksRes.data);
             
-            // Auto-select default bank
+            // Auto-select default bank and set its currency
             const defaultBank = banksRes.data.find((b:any) => b.is_default);
-            if (defaultBank) setSelectedBankId(defaultBank.id);
+            if (defaultBank) {
+                setSelectedBankId(defaultBank.id);
+                setCurrency(defaultBank.currency);
+            }
         } catch (e) {
             console.error(e);
         }
     };
     fetchData();
   }, []);
+
+  // --- Handle Bank Change ---
+  const handleBankChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const bankId = e.target.value;
+    setSelectedBankId(bankId);
+    
+    const bank = banks.find(b => b.id.toString() === bankId);
+    if (bank) setCurrency(bank.currency);
+  };
 
   // --- Calculations ---
   useEffect(() => {
@@ -125,7 +140,8 @@ export default function NewInvoicePage() {
         grandTotal: grandTotal,
         isManual: isManual,
         manualNumber: isManual ? manualNumber : undefined,
-        remarks: remarks
+        remarks: remarks,
+        currency // Send currency to backend
       };
 
       const response = await api.post('/invoices', payload);
@@ -157,7 +173,6 @@ export default function NewInvoicePage() {
         <Card className="md:col-span-1 shadow-sm">
           <CardContent className="p-6 space-y-4">
             
-            {/* FIXED: Manual Override Switch */}
             <div className="flex items-center justify-between bg-slate-100 p-3 rounded-md">
                 <div className="flex items-center space-x-2" title="Enable to backdate or use custom invoice numbers">
                     <Label htmlFor="manual-mode" className="cursor-pointer">Manual Override</Label>
@@ -182,7 +197,7 @@ export default function NewInvoicePage() {
                 <select
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={selectedBankId}
-                    onChange={(e) => setSelectedBankId(e.target.value)}
+                    onChange={handleBankChange}
                 >
                     <option value="">Select Bank...</option>
                     {banks.map(bank => (
@@ -254,7 +269,7 @@ export default function NewInvoicePage() {
             </div>
 
             {/* Items Table */}
-            <InvoiceItemsTable items={items} setItems={setItems} />
+            <InvoiceItemsTable items={items} setItems={setItems} currency={currency} />
 
             {/* Remarks */}
             <div className="space-y-2">
@@ -280,7 +295,10 @@ export default function NewInvoicePage() {
                     </div>
                     <div className="border-t pt-2 flex justify-between font-bold text-lg">
                         <span>Total</span>
-                        <span>₹{grandTotal.toFixed(2)}</span>
+                        {/* DYNAMIC CURRENCY FORMAT */}
+                        <span>
+                            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: currency }).format(grandTotal)}
+                        </span>
                     </div>
                 </div>
             </div>

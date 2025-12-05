@@ -39,15 +39,39 @@ export class QuotationService {
     return await prisma.$transaction(async (tx) => {
       const dateObj = new Date(data.issueDate);
       
-      // Fetch Format Setting
+      // --- 1. Fetch Client for Country Code Logic ---
+      const client = await tx.client.findUnique({ where: { id: data.clientId } });
+      const country = client?.country || "India";
+
+      // Map common full names to Codes (Expand as needed)
+      const countryMap: Record<string, string> = {
+          "India": "IN",
+          "United States": "US",
+          "USA": "US",
+          "United Arab Emirates": "UAE",
+          "Saudi Arabia": "SA",
+          "United Kingdom": "UK",
+          "Canada": "CA",
+          "Australia": "AU",
+          "Singapore": "SG"
+      };
+
+      // Determine CC: Use map, or fallback to uppercase short code
+      let cc = countryMap[country];
+      if (!cc) {
+          // If country is "UK" or "USA", keep it. If "Germany", take "GE" (or "DE" if mapped above)
+          cc = country.length <= 3 ? country.toUpperCase() : country.substring(0, 2).toUpperCase();
+      }
+      // ---------------------------------------------
+
+      // Fetch Format Setting (Updated Default to match request)
       const setting = await tx.systemSetting.findUnique({ where: { key: 'DOCUMENT_SETTINGS' } });
-      const format = (setting?.json_value as any)?.quotation_format || "QTN/{FY}/{SEQ:3}";
+      const format = (setting?.json_value as any)?.quotation_format || "Q/{CC}{FY}/{SEQ:3}";
 
       // Calculate Fiscal Year
       const month = dateObj.getMonth() + 1;
       const year = dateObj.getFullYear();
       const shortYear = year % 100;
-      // UPDATED: Removed hyphen from format
       const fy = month >= 4 ? `${shortYear}${shortYear + 1}` : `${shortYear - 1}${shortYear}`;
 
       // Sequence Handling
@@ -60,6 +84,7 @@ export class QuotationService {
 
       // Format String Generation
       let numStr = format
+          .replace('{CC}', cc) // Inject Country Code
           .replace('{FY}', fy)
           .replace('{YYYY}', dateObj.getFullYear().toString())
           .replace('{MM}', (dateObj.getMonth() + 1).toString().padStart(2, '0'));
@@ -107,7 +132,6 @@ export class QuotationService {
         remarks: data.remarks,
         subtotal: data.subtotal,
         grand_total: data.grandTotal,
-        // Allow status update if needed, or handle separately
       }
     });
   }

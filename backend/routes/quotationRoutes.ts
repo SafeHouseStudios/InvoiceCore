@@ -6,6 +6,19 @@ import { AuthRequest, authorize } from '../middleware/authMiddleware';
 
 const router = Router();
 
+// --- NEW: MISSING ROUTE ADDED HERE ---
+router.get('/:id', async (req, res) => {
+  try {
+    const quote = await QuotationService.getQuotationById(Number(req.params.id));
+    if (!quote) return res.status(404).json({ error: "Quotation not found" });
+    res.json(quote);
+  } catch (e) { 
+    console.error(e);
+    res.status(500).json({ error: "Failed to fetch quotation" }); 
+  }
+});
+// -------------------------------------
+
 router.get('/:id/pdf', async (req, res) => {
   try {
     const pdf = await PdfService.generateQuotationPdf(Number(req.params.id));
@@ -29,7 +42,14 @@ router.post('/', async (req: Request, res: Response) => {
   } catch (e) { res.status(500).json({ error: "Failed" }); }
 });
 
-// Delete: Admin/Sudo Only
+router.put('/:id', async (req: Request, res: Response) => {
+  try {
+    const quote = await QuotationService.updateQuotation(Number(req.params.id), req.body);
+    // Log activity if needed
+    res.json(quote);
+  } catch (e) { res.status(500).json({ error: "Failed to update" }); }
+});
+
 router.delete('/:id', authorize(['SUDO_ADMIN', 'ADMIN']), async (req: Request, res: Response) => {
   try {
     await QuotationService.deleteQuotation(Number(req.params.id));

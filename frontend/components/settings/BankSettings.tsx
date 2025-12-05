@@ -29,6 +29,7 @@ export function BankSettings({ disabled }: BankSettingsProps) {
   const openDialog = (bank?: any) => {
     if (disabled) return;
     setEditingId(bank ? bank.id : null);
+    // Updated default state with payment_method
     setForm(bank || { 
         label: '', 
         currency: 'USD', 
@@ -42,7 +43,8 @@ export function BankSettings({ disabled }: BankSettingsProps) {
         iban: '',
         sort_code: '',
         upi_id: '',
-        branch_address: ''
+        branch_address: '',
+        payment_method: '' // <--- Added
     });
     setIsOpen(true);
   };
@@ -87,7 +89,11 @@ export function BankSettings({ disabled }: BankSettingsProps) {
                                 <p className="text-sm font-semibold">{bank.bank_name}</p>
                                 <p className="text-xs text-muted-foreground">Acct: <span className="font-mono">{bank.account_number}</span> ({bank.currency})</p>
                                 
-                                {/* Extended Details Display */}
+                                {/* Display Payment Method if it exists */}
+                                {bank.payment_method && (
+                                    <p className="text-xs text-primary font-medium mt-1">Method: {bank.payment_method}</p>
+                                )}
+
                                 <div className="text-[10px] text-muted-foreground grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
                                     {bank.routing_number && <span>Routing: {bank.routing_number}</span>}
                                     {bank.swift_code && <span>SWIFT: {bank.swift_code}</span>}
@@ -137,7 +143,6 @@ export function BankSettings({ disabled }: BankSettingsProps) {
                                 <option value="EUR">EUR (€)</option>
                                 <option value="GBP">GBP (£)</option>
                                 <option value="CAD">CAD ($)</option>
-                                <option value="AUD">AUD ($)</option>
                             </select>
                         </div>
                     </div>
@@ -149,15 +154,26 @@ export function BankSettings({ disabled }: BankSettingsProps) {
                     </div>
 
                     {/* Account Numbers */}
-                    <div className="space-y-2">
-                        <Label>Account Number</Label>
-                        <Input value={form.account_number} onChange={e => setForm({...form, account_number: e.target.value})} />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Account Number</Label>
+                            <Input value={form.account_number} onChange={e => setForm({...form, account_number: e.target.value})} />
+                        </div>
+                         {/* --- ADDED FIELD --- */}
+                        <div className="space-y-2">
+                            <Label>Payment Method</Label>
+                            <Input 
+                                value={form.payment_method || ''} 
+                                onChange={e => setForm({...form, payment_method: e.target.value})} 
+                                placeholder="e.g. ACH / FEDWIRE / SWIFT"
+                            />
+                        </div>
                     </div>
 
                     {/* International Codes (Grid) */}
                     <div className="grid grid-cols-3 gap-4 bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border">
                          <div className="space-y-2">
-                            <Label className="text-xs">Routing Number (USD/CAD)</Label>
+                            <Label className="text-xs">Routing Number</Label>
                             <Input className="h-8 text-sm" value={form.routing_number || ''} onChange={e => setForm({...form, routing_number: e.target.value})} placeholder="021..." />
                         </div>
                          <div className="space-y-2">
@@ -165,19 +181,19 @@ export function BankSettings({ disabled }: BankSettingsProps) {
                             <Input className="h-8 text-sm" value={form.swift_code || ''} onChange={e => setForm({...form, swift_code: e.target.value})} placeholder="CHAS..." />
                         </div>
                          <div className="space-y-2">
-                            <Label className="text-xs">IBAN (Europe)</Label>
+                            <Label className="text-xs">IBAN</Label>
                             <Input className="h-8 text-sm" value={form.iban || ''} onChange={e => setForm({...form, iban: e.target.value})} placeholder="GB89..." />
                         </div>
                          <div className="space-y-2">
-                            <Label className="text-xs">Sort Code (UK)</Label>
+                            <Label className="text-xs">Sort Code</Label>
                             <Input className="h-8 text-sm" value={form.sort_code || ''} onChange={e => setForm({...form, sort_code: e.target.value})} placeholder="04-14..." />
                         </div>
                          <div className="space-y-2">
-                            <Label className="text-xs">IFSC (India)</Label>
+                            <Label className="text-xs">IFSC</Label>
                             <Input className="h-8 text-sm" value={form.ifsc_code || ''} onChange={e => setForm({...form, ifsc_code: e.target.value})} placeholder="SBIN..." />
                         </div>
                          <div className="space-y-2">
-                            <Label className="text-xs">UPI ID (India)</Label>
+                            <Label className="text-xs">UPI ID</Label>
                             <Input className="h-8 text-sm" value={form.upi_id || ''} onChange={e => setForm({...form, upi_id: e.target.value})} placeholder="user@bank" />
                         </div>
                     </div>

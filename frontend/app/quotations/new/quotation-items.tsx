@@ -1,4 +1,3 @@
-// frontend/app/quotations/new/quotation-items.tsx
 "use client";
 
 import React from "react";
@@ -22,7 +21,6 @@ interface QuotationItemsProps {
   currency?: string;
 }
 
-// Reuse the HSN codes or fetch dynamically if preferred later
 const HSN_CODES = ["998313", "998314", "998315", "998316", "998319"];
 
 export function QuotationItemsTable({ items, setItems, currency = "INR" }: QuotationItemsProps) {
@@ -50,59 +48,63 @@ export function QuotationItemsTable({ items, setItems, currency = "INR" }: Quota
   };
 
   return (
-    <div className="space-y-4">
-      <div className="border rounded-md">
-        <Table>
-          <TableHeader className="bg-slate-50">
+    <div className="space-y-3">
+      <div className="border rounded-md overflow-hidden">
+        {/* table-fixed ensures columns respect the w-[px] classes */}
+        <Table className="table-fixed w-full">
+          <TableHeader className="bg-slate-100 dark:bg-slate-800">
             <TableRow>
-              <TableHead className="w-[35%]">Description</TableHead>
-              <TableHead className="w-[15%]">HSN / SAC</TableHead>
-              <TableHead className="w-[10%]">Qty</TableHead>
-              <TableHead className="w-[20%]">Rate</TableHead>
-              <TableHead className="w-[15%] text-right">Amount</TableHead>
-              <TableHead className="w-[5%]"></TableHead>
+              {/* Description takes remaining space */}
+              <TableHead className="w-auto px-3 text-left">Description</TableHead>
+              {/* Strict widths for inputs so they never shrink */}
+              <TableHead className="w-[120px] px-2">HSN/SAC</TableHead>
+              <TableHead className="w-[90px] px-2 text-center">Qty</TableHead>
+              <TableHead className="w-[130px] px-2 text-right">Rate</TableHead>
+              <TableHead className="w-[130px] px-3 text-right">Amount</TableHead>
+              <TableHead className="w-[50px] px-2"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {items.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell>
+              <TableRow key={item.id} className="hover:bg-transparent">
+                <TableCell className="p-2">
                   <Input 
-                    placeholder="Service / Product" 
+                    placeholder="Item Name" 
                     value={item.description}
                     onChange={(e) => updateItem(item.id, "description", e.target.value)}
+                    className="h-9"
                   />
                 </TableCell>
-                <TableCell>
+                <TableCell className="p-2">
                   <select
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     value={item.hsn}
                     onChange={(e) => updateItem(item.id, "hsn", e.target.value)}
                   >
-                    <option value="">Select HSN...</option>
-                    {HSN_CODES.map(code => (
-                        <option key={code} value={code}>{code}</option>
-                    ))}
+                    <option value="">Select...</option>
+                    {HSN_CODES.map(code => <option key={code} value={code}>{code}</option>)}
                   </select>
                 </TableCell>
-                <TableCell>
+                <TableCell className="p-2">
                   <Input 
                     type="number" min="1" value={item.quantity}
                     onChange={(e) => updateItem(item.id, "quantity", Number(e.target.value))}
+                    className="h-9 text-center px-1"
                   />
                 </TableCell>
-                <TableCell>
+                <TableCell className="p-2">
                   <Input 
                     type="number" min="0" value={item.rate}
                     onChange={(e) => updateItem(item.id, "rate", Number(e.target.value))}
+                    className="h-9 text-right px-2"
                   />
                 </TableCell>
-                <TableCell className="text-right font-medium">
+                <TableCell className="p-2 text-right font-bold text-sm text-slate-600">
                   {new Intl.NumberFormat('en-IN', { style: 'currency', currency: currency }).format(item.amount)}
                 </TableCell>
-                <TableCell>
-                  <Button variant="ghost" size="icon" onClick={() => removeItem(item.id)}>
-                    <Trash2 className="h-4 w-4 text-red-500" />
+                <TableCell className="p-2 text-center">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => removeItem(item.id)}>
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </TableCell>
               </TableRow>
@@ -110,8 +112,8 @@ export function QuotationItemsTable({ items, setItems, currency = "INR" }: Quota
           </TableBody>
         </Table>
       </div>
-      <Button variant="outline" onClick={addItem} className="w-full border-dashed">
-        <Plus className="h-4 w-4 mr-2" /> Add Item
+      <Button variant="outline" size="sm" onClick={addItem} className="w-full border-dashed h-9 text-xs font-medium">
+        <Plus className="h-3 w-3 mr-2" /> Add Line Item
       </Button>
     </div>
   );

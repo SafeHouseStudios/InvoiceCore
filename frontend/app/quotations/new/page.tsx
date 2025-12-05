@@ -20,6 +20,7 @@ export default function NewQuotationPage() {
 
   // --- State ---
   const [issueDate, setIssueDate] = useState<Date | undefined>(new Date());
+  const [expiryDate, setExpiryDate] = useState<Date | undefined>(undefined);
   
   const [clients, setClients] = useState<any[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
@@ -36,7 +37,7 @@ export default function NewQuotationPage() {
 
   // Text Fields
   const [servicesOffered, setServicesOffered] = useState("");
-  const [contractTenure, setContractTenure] = useState("");
+  const [contractTerms, setContractTerms] = useState("");
   const [remarks, setRemarks] = useState("");
 
   // --- Data Fetching ---
@@ -56,7 +57,7 @@ export default function NewQuotationPage() {
   useEffect(() => {
     const newSubtotal = items.reduce((sum, item) => sum + item.amount, 0);
     setSubtotal(newSubtotal);
-    setGrandTotal(newSubtotal); // Simple total for now (Tax logic applied later if needed)
+    setGrandTotal(newSubtotal); // Quotations typically show raw estimates (Pre-Tax)
   }, [items]);
 
   // --- Save Handler ---
@@ -69,30 +70,35 @@ export default function NewQuotationPage() {
       const payload = {
         clientId: Number(selectedClientId),
         issueDate: issueDate?.toISOString(),
+        expiryDate: expiryDate?.toISOString(), // Optional
         items: items,
         subtotal: subtotal,
         grandTotal: grandTotal,
         
         // Mapped Fields
         servicesOffered: servicesOffered,
-        contractTerms: contractTenure, // Mapping Tenure to Terms
+        contractTerms: contractTerms,
         remarks: remarks,
       };
 
       const response = await api.post('/quotations', payload);
+      
+      // Success Feedback
+      // You can replace this alert with a Toast if you prefer
       alert(`Success! Quotation ${response.data.quotation_number} Created`);
+      
       router.push('/quotations');
 
     } catch (error: any) {
       console.error(error);
-      alert("Failed to create quotation");
+      alert("Failed to create quotation. Check console for details.");
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-[1200px] mx-auto">
+    <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
       
       {/* Header */}
       <div className="flex justify-between items-center">
@@ -105,16 +111,16 @@ export default function NewQuotationPage() {
                 <p className="text-sm text-muted-foreground">Create a new proposal</p>
             </div>
         </div>
-        <Button onClick={handleSave} disabled={isSaving} className="bg-primary text-white hover:bg-primary/90">
+        <Button onClick={handleSave} disabled={isSaving} className="bg-primary text-white hover:bg-primary/90 shadow-lg shadow-primary/25">
           {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
           Save Quote
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         
-        {/* LEFT COLUMN: Client & Basic Info */}
-        <div className="lg:col-span-1 space-y-6">
+        {/* LEFT COLUMN: Client & Meta Data */}
+        <div className="xl:col-span-1 space-y-6">
             
             {/* 1. Client Details */}
             <Card className="shadow-horizon border-none bg-card">
@@ -136,14 +142,14 @@ export default function NewQuotationPage() {
 
                     {/* Auto-filled Fields */}
                     <div className="space-y-2">
-                        <Label>Contact Person / Phone</Label>
+                        <Label>Contact Phone</Label>
                         <div className="relative">
                             <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input disabled value={selectedClient?.phone || "—"} className="pl-9 bg-slate-50 dark:bg-slate-900/50" />
                         </div>
                     </div>
                     <div className="space-y-2">
-                        <Label>Email</Label>
+                        <Label>Email Address</Label>
                         <div className="relative">
                             <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input disabled value={selectedClient?.email || "—"} className="pl-9 bg-slate-50 dark:bg-slate-900/50" />
@@ -152,7 +158,7 @@ export default function NewQuotationPage() {
                 </CardContent>
             </Card>
 
-            {/* 2. Quote Details */}
+            {/* 2. Quote Meta */}
             <Card className="shadow-horizon border-none bg-card">
                 <CardHeader><CardTitle className="text-base">Quote Details</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
@@ -174,57 +180,83 @@ export default function NewQuotationPage() {
                             </PopoverContent>
                         </Popover>
                     </div>
-                    <div className="space-y-2">
-                        <Label>Contract Tenure</Label>
-                        <Input 
-                            placeholder="e.g. 12 Months" 
-                            value={contractTenure}
-                            onChange={(e) => setContractTenure(e.target.value)}
-                        />
+                    <div className="space-y-2 flex flex-col">
+                        <Label>Valid Until (Optional)</Label>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                            <Button variant={"outline"} className="w-full pl-3 text-left font-normal">
+                                {expiryDate ? format(expiryDate, "PPP") : <span>Pick a date</span>}
+                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar mode="single" selected={expiryDate} onSelect={setExpiryDate} />
+                            </PopoverContent>
+                        </Popover>
                     </div>
                 </CardContent>
             </Card>
         </div>
 
-        {/* RIGHT COLUMN: BOQ & Scope */}
-        <div className="lg:col-span-2 space-y-6">
+        {/* RIGHT COLUMN: BOQ & Scope (Wider area for table) */}
+        <div className="xl:col-span-2 space-y-6">
             
             {/* 3. BOQ (Bill of Quantities) */}
             <Card className="shadow-horizon border-none bg-card">
-                <CardHeader><CardTitle className="text-base">BOQ (Bill of Quantities)</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-base">Bill of Quantities</CardTitle></CardHeader>
                 <CardContent className="p-6">
+                    {/* This component now has fixed widths and horizontal scroll if needed */}
                     <QuotationItemsTable items={items} setItems={setItems} />
-                    <div className="flex justify-end mt-4 pt-4 border-t">
-                        <div className="text-right">
-                            <span className="text-muted-foreground mr-4">Total Amount:</span>
-                            <span className="text-xl font-bold text-primary">
-                                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(grandTotal)}
-                            </span>
+                    
+                    <div className="flex justify-end mt-6 pt-4 border-t">
+                        <div className="text-right w-64">
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="text-muted-foreground text-sm">Subtotal</span>
+                                <span className="font-medium">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(subtotal)}</span>
+                            </div>
+                            <div className="flex justify-between items-center border-t pt-2 mt-2">
+                                <span className="font-bold text-lg text-foreground">Total Estimate</span>
+                                <span className="text-xl font-bold text-primary">
+                                    {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(grandTotal)}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </CardContent>
             </Card>
 
-            {/* 4. Scope & Remarks */}
+            {/* 4. Additional Info */}
             <Card className="shadow-horizon border-none bg-card">
-                <CardHeader><CardTitle className="text-base">Additional Information</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-base">Scope & Terms</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                        <Label>Services Offered (Scope of Work)</Label>
-                        <Textarea 
-                            placeholder="Describe the services in detail..."
-                            value={servicesOffered}
-                            onChange={(e) => setServicesOffered(e.target.value)}
-                            className="h-24"
-                        />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <Label>Services Offered (Scope)</Label>
+                            <Textarea 
+                                placeholder="Describe the scope of work..."
+                                value={servicesOffered}
+                                onChange={(e) => setServicesOffered(e.target.value)}
+                                className="h-32 bg-background"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Contract Terms</Label>
+                            <Textarea 
+                                placeholder="e.g. 50% Advance, Balance on Delivery..."
+                                value={contractTerms}
+                                onChange={(e) => setContractTerms(e.target.value)}
+                                className="h-32 bg-background"
+                            />
+                        </div>
                     </div>
-                    <div className="space-y-2">
-                        <Label>Remarks / Notes</Label>
-                        <Textarea 
-                            placeholder="Any other internal notes..."
+                    
+                    <div className="space-y-2 pt-2">
+                        <Label>Internal Remarks (Not visible to client)</Label>
+                        <Input 
+                            placeholder="Notes for team..."
                             value={remarks}
                             onChange={(e) => setRemarks(e.target.value)}
-                            className="h-20"
+                            className="bg-background"
                         />
                     </div>
                 </CardContent>

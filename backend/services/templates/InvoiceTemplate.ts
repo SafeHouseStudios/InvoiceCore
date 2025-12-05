@@ -102,6 +102,8 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any): string => 
         `;
     }
 
+    
+
     // 5. HTML Template
     return `
 <!DOCTYPE html>

@@ -4,33 +4,52 @@ import React, { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DollarSign, Activity, TrendingUp, Wallet, AlertCircle, Loader2 } from "lucide-react";
+import { DollarSign, Activity, TrendingUp, Wallet, AlertCircle, Loader2, Calendar as CalendarIcon, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, LineChart, Line
 } from "recharts";
 import { format } from "date-fns";
+import { DateRange } from "react-day-picker";
+import { cn } from "@/lib/utils";
 
 export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  
+  // Date Range State
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
-  useEffect(() => {
-    const fetchData = async () => {
-        try {
-            const res = await api.get('/dashboard/stats');
-            setData(res.data);
-        } catch (err) {
-            console.error(err);
-            setError("Failed to load dashboard data.");
-        } finally {
-            setLoading(false);
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+        // Construct Query Params for Filtering
+        let query = "";
+        if (dateRange?.from) {
+            const fromStr = dateRange.from.toISOString();
+            const toStr = dateRange.to ? dateRange.to.toISOString() : fromStr;
+            query = `?from=${fromStr}&to=${toStr}`;
         }
-    };
-    fetchData();
-  }, []);
 
-  if (loading) {
+        const res = await api.get(`/dashboard/stats${query}`);
+        setData(res.data);
+    } catch (err) {
+        console.error(err);
+        setError("Failed to load dashboard data.");
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  // Fetch on Mount and whenever Date Range changes
+  useEffect(() => {
+    fetchData();
+  }, [dateRange]);
+
+  if (loading && !data) {
     return (
       <div className="flex h-[80vh] flex-col items-center justify-center text-muted-foreground">
         <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
@@ -39,18 +58,17 @@ export default function DashboardPage() {
     );
   }
 
-  if (error || !data) {
+  if (error && !data) {
     return (
         <div className="p-8 text-center text-red-500">
             <AlertCircle className="mx-auto h-10 w-10 mb-2" />
-            <p>{error || "No data available."}</p>
+            <p>{error}</p>
         </div>
     );
   }
 
-  const { summary, charts, tables } = data;
+  const { summary, charts, tables } = data || { summary: {}, charts: {}, tables: {} };
   
-  // Safe Accessors
   const monthlyStats = charts?.monthlyStats || [];
   const topUnpaid = tables?.topUnpaid || [];
   const lastAvgSale = monthlyStats.length > 0 ? monthlyStats[monthlyStats.length - 1].avgSale : 0;
@@ -61,22 +79,60 @@ export default function DashboardPage() {
   return (
     <div className="p-6 space-y-6">
       
+      {/* HEADER WITH FILTER */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+            <p className="text-muted-foreground">Financial Overview & Analytics</p>
+        </div>
+
+        {/* Date Picker */}
+        <div className="flex items-center gap-2 bg-card p-1 rounded-lg border shadow-sm">
+             <Popover>
+                <PopoverTrigger asChild>
+                    <Button variant="ghost" className={cn("w-[260px] justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateRange?.from ? (
+                            dateRange.to ? (
+                                <>{format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}</>
+                            ) : format(dateRange.from, "LLL dd, y")
+                        ) : <span>Filter by Date Range</span>}
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar
+                        initialFocus
+                        mode="range"
+                        defaultMonth={dateRange?.from}
+                        selected={dateRange}
+                        onSelect={setDateRange}
+                        numberOfMonths={2}
+                    />
+                </PopoverContent>
+             </Popover>
+             {dateRange && (
+                 <Button variant="ghost" size="icon" onClick={() => setDateRange(undefined)} title="Clear Filter">
+                     <X className="w-4 h-4" />
+                 </Button>
+             )}
+        </div>
+      </div>
+      
       {/* 1. TOP METRICS ROW */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard title="Total Revenue" value={summary?.totalRevenue || 0} icon={<DollarSign />} color="text-blue-600" bg="bg-blue-50 dark:bg-blue-900/20" />
         <MetricCard title="Total Expenses" value={summary?.totalExpense || 0} icon={<Wallet />} color="text-red-600" bg="bg-red-50 dark:bg-red-900/20" />
         <MetricCard title="Net Profit" value={summary?.netProfit || 0} icon={<Activity />} color="text-green-600" bg="bg-green-50 dark:bg-green-900/20" />
-        <MetricCard title="Avg Sale (Latest)" value={lastAvgSale} icon={<TrendingUp />} color="text-purple-600" bg="bg-purple-50 dark:bg-purple-900/20" />
+        <MetricCard title="Avg Sale" value={lastAvgSale} icon={<TrendingUp />} color="text-purple-600" bg="bg-purple-50 dark:bg-purple-900/20" />
       </div>
 
-      {/* 2. CHARTS ROW 1 */}
+      {/* 2. CHARTS ROW */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Bar Chart */}
         <Card className="shadow-horizon border-none bg-card">
             <CardHeader>
                 <CardTitle>Sales vs Expenses</CardTitle>
-                <CardDescription>Monthly financial performance</CardDescription>
+                <CardDescription>Performance over time</CardDescription>
             </CardHeader>
             <CardContent className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -93,11 +149,10 @@ export default function DashboardPage() {
             </CardContent>
         </Card>
 
-        {/* Line Chart */}
         <Card className="shadow-horizon border-none bg-card">
             <CardHeader>
                 <CardTitle>Net Balance Trend</CardTitle>
-                <CardDescription>Profit trajectory over time</CardDescription>
+                <CardDescription>Cumulative growth</CardDescription>
             </CardHeader>
             <CardContent className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -116,10 +171,8 @@ export default function DashboardPage() {
 
       {/* 3. TABLES ROW */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Balances Table */}
         <Card className="shadow-horizon border-none bg-card">
-            <CardHeader><CardTitle>Month-End Balance</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Recent Balances</CardTitle></CardHeader>
             <CardContent>
                 <Table>
                     <TableHeader>
@@ -146,7 +199,6 @@ export default function DashboardPage() {
             </CardContent>
         </Card>
 
-        {/* Unpaid Invoices Table */}
         <Card className="shadow-horizon border-none bg-card">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-destructive">
@@ -180,13 +232,12 @@ export default function DashboardPage() {
                 </Table>
             </CardContent>
         </Card>
-
       </div>
     </div>
   );
 }
 
-// Sub-component for Metrics
+// Reusable Metric Card
 function MetricCard({ title, value, icon, color, bg }: any) {
     const formatCurrency = (val: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
     return (
@@ -206,7 +257,6 @@ function MetricCard({ title, value, icon, color, bg }: any) {
     )
 }
 
-// Recharts Tooltip Style (Inline because it doesn't support CSS classes well)
 const tooltipStyle = {
     backgroundColor: 'hsl(var(--card))',
     borderColor: 'hsl(var(--border))',

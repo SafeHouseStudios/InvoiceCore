@@ -16,6 +16,19 @@ import {
 } from "@/components/ui/select";
 import { useRouter } from 'next/navigation';
 
+// --- Static Map for Indian States (GST Codes) ---
+const STATE_MAP: Record<number, string> = {
+  1: "Jammu & Kashmir", 2: "Himachal Pradesh", 3: "Punjab", 4: "Chandigarh",
+  5: "Uttarakhand", 6: "Haryana", 7: "Delhi", 8: "Rajasthan", 9: "Uttar Pradesh",
+  10: "Bihar", 11: "Sikkim", 12: "Arunachal Pradesh", 13: "Nagaland", 14: "Manipur",
+  15: "Mizoram", 16: "Tripura", 17: "Meghalaya", 18: "Assam", 19: "West Bengal",
+  20: "Jharkhand", 21: "Odisha", 22: "Chhattisgarh", 23: "Madhya Pradesh",
+  24: "Gujarat", 25: "Daman & Diu", 26: "Dadra & Nagar Haveli", 27: "Maharashtra",
+  29: "Karnataka", 30: "Goa", 31: "Lakshadweep", 32: "Kerala", 33: "Tamil Nadu",
+  34: "Puducherry", 35: "Andaman & Nicobar", 36: "Telangana", 37: "Andhra Pradesh",
+  38: "Ladakh", 97: "Other Territory", 99: "International"
+};
+
 export default function ClientListPage() {
   const router = useRouter();
   const [clients, setClients] = useState<any[]>([]);
@@ -75,6 +88,22 @@ export default function ClientListPage() {
     } catch (e) {
         alert("Failed to delete client");
     }
+  };
+
+  // Helper to format location display
+  const getLocationDisplay = (client: any) => {
+    // 1. Try City + Country
+    if (client.addresses?.billing?.city) {
+        return `${client.addresses.billing.city}, ${client.country}`;
+    }
+    
+    // 2. If India, try State Name
+    if (client.country === 'India' && client.state_code) {
+        return `${STATE_MAP[client.state_code] || client.state_code} - India`;
+    }
+
+    // 3. Fallback to Country only
+    return client.country;
   };
 
   return (
@@ -156,7 +185,7 @@ export default function ClientListPage() {
                     <TableCell>
                         <div className="flex items-center text-muted-foreground text-sm">
                             <MapPin className="w-3 h-3 mr-1 text-primary" />
-                            {client.state_code === 99 ? "International" : `${client.state_code} - India`}
+                            {getLocationDisplay(client)}
                         </div>
                     </TableCell>
                     <TableCell>

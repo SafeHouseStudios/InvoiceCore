@@ -32,6 +32,9 @@ export class BankService {
         sort_code: data.sort_code,
         branch_address: data.branch_address,
         upi_id: data.upi_id,
+        // --- ADDED ---
+        payment_method: data.payment_method, 
+        // -------------
         is_default: data.is_default || false
       }
     });
@@ -60,6 +63,9 @@ export class BankService {
         sort_code: data.sort_code,
         branch_address: data.branch_address,
         upi_id: data.upi_id,
+        // --- ADDED ---
+        payment_method: data.payment_method,
+        // -------------
         is_default: data.is_default
       }
     });

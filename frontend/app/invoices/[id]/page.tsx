@@ -34,6 +34,9 @@ export default function EditInvoicePage() {
   
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [selectedBankId, setSelectedBankId] = useState<string>("");
+  
+  // NEW: Currency State
+  const [currency, setCurrency] = useState("INR");
 
   const [items, setItems] = useState<any[]>([]);
   const [subtotal, setSubtotal] = useState(0);
@@ -60,7 +63,11 @@ export default function EditInvoicePage() {
             if(inv.due_date) setDueDate(new Date(inv.due_date));
             setRemarks(inv.remarks || "");
             setSelectedClientId(inv.client_id.toString());
+            
+            // Set Bank & Currency
             setSelectedBankId(inv.bank_account_id?.toString() || "");
+            setCurrency(inv.currency || "INR");
+
             setItems(inv.line_items);
             setTaxData(inv.tax_summary);
             
@@ -75,13 +82,25 @@ export default function EditInvoicePage() {
     if (id) loadAll();
   }, [id, router]);
 
-  // --- 2. Recalculate Totals ---
+  // --- 2. Handle Bank Change (Update Currency) ---
+  const handleBankChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const bankId = e.target.value;
+    setSelectedBankId(bankId);
+    
+    // Find bank and set currency
+    const bank = banks.find(b => b.id.toString() === bankId);
+    if (bank) {
+        setCurrency(bank.currency);
+    }
+  };
+
+  // --- 3. Recalculate Totals ---
   useEffect(() => {
     const newSub = items.reduce((sum, i) => sum + Number(i.amount), 0);
     setSubtotal(newSub);
   }, [items]);
 
-  // --- 3. Recalculate Tax Logic (Only if Client changes or Amounts change) ---
+  // --- 4. Recalculate Tax Logic ---
   useEffect(() => {
     if (!selectedClientId || subtotal === 0) return;
     
@@ -104,7 +123,6 @@ export default function EditInvoicePage() {
     });
   }, [selectedClientId, subtotal, clients]);
 
-  // --- 4. Final Grand Total ---
   useEffect(() => {
     const taxTotal = taxData.breakdown.cgst + taxData.breakdown.sgst + taxData.breakdown.igst;
     setGrandTotal(subtotal + taxTotal);
@@ -123,7 +141,8 @@ export default function EditInvoicePage() {
             taxSummary: taxData,
             subtotal,
             grandTotal,
-            remarks
+            remarks,
+            currency // Send updated currency to backend
         });
         alert("Invoice Updated Successfully");
         router.push('/invoices');
@@ -178,7 +197,7 @@ export default function EditInvoicePage() {
                     <Label>Bank Account</Label>
                     <select 
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        value={selectedBankId} onChange={(e) => setSelectedBankId(e.target.value)}
+                        value={selectedBankId} onChange={handleBankChange} // Updated Handler
                     >
                         <option value="">Select Bank...</option>
                         {banks.map(b => <option key={b.id} value={b.id}>{b.bank_name} - {b.currency}</option>)}
@@ -220,7 +239,8 @@ export default function EditInvoicePage() {
          {/* Main Content: Items */}
          <Card className="md:col-span-2 shadow-horizon border-none bg-card">
             <CardContent className="p-6 space-y-6">
-                <InvoiceItemsTable items={items} setItems={setItems} />
+                {/* Pass Currency to Table */}
+                <InvoiceItemsTable items={items} setItems={setItems} currency={currency} />
                 
                 <div className="space-y-2">
                     <Label>Remarks</Label>
@@ -239,7 +259,10 @@ export default function EditInvoicePage() {
                         </div>
                         <div className="border-t border-border pt-2 flex justify-between font-bold text-lg text-primary">
                             <span>Total</span>
-                            <span>₹{grandTotal.toFixed(2)}</span>
+                            {/* DYNAMIC CURRENCY FORMATTING */}
+                            <span>
+                                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: currency }).format(grandTotal)}
+                            </span>
                         </div>
                     </div>
                 </div>

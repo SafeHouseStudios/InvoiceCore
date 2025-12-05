@@ -115,6 +115,7 @@ model BankAccount {
   sort_code           String?  // UK
   branch_address      String?  @db.Text
   upi_id              String?  // India UPI
+  payment_method      String? // e.g. "Wire Transfer", "ACH", "Zelle"
   
   created_at          DateTime @default(now())
 
