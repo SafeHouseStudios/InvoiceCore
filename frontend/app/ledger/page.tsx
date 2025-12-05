@@ -118,7 +118,7 @@ export default function LedgerPage() {
         <Card className="bg-green-50 dark:bg-green-900/10 border-green-100 dark:border-green-900">
             <CardContent className="p-6">
                 <div className="flex items-center gap-3">
-                    <div className="p-2 bg-green-100 dark:bg-green-800 rounded-full text-green-600 dark:text-green-100"><ArrowUpRight className="w-5 h-5" /></div>
+                    <div className="p-2 bg-green-100 dark:bg-green-800 rounded-full text-green-600 dark:text-green-100"><ArrowDownLeft className="w-5 h-5" /></div>
                     <div>
                         <p className="text-sm font-medium text-green-800 dark:text-green-300">Income ({timeRange})</p>
                         <h3 className="text-2xl font-bold text-green-700 dark:text-green-400">{formatCurrency(totalIncome)}</h3>
@@ -130,7 +130,7 @@ export default function LedgerPage() {
         <Card className="bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900">
             <CardContent className="p-6">
                 <div className="flex items-center gap-3">
-                    <div className="p-2 bg-red-100 dark:bg-red-800 rounded-full text-red-600 dark:text-red-100"><ArrowDownLeft className="w-5 h-5" /></div>
+                    <div className="p-2 bg-red-100 dark:bg-red-800 rounded-full text-red-600 dark:text-red-100"><ArrowUpRight className="w-5 h-5" /></div>
                     <div>
                         <p className="text-sm font-medium text-red-800 dark:text-red-300">Expenses ({timeRange})</p>
                         <h3 className="text-2xl font-bold text-red-700 dark:text-red-400">{formatCurrency(totalExpense)}</h3>

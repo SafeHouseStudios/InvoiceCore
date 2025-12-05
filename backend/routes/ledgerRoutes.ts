@@ -1,60 +1,45 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { LedgerService } from '../services/LedgerService';
 import { PdfService } from '../services/PdfService';
-import { startOfDay, startOfMonth, startOfQuarter, startOfYear, subMonths, isAfter, isSameDay } from 'date-fns';
 
 const router = Router();
 
-// Helper: Filter Transactions
-const filterData = (data: any[], filter: string) => {
-  const now = new Date();
-  return data.filter(t => {
-    const d = new Date(t.date);
-    switch (filter) {
-      case 'daily': return isSameDay(d, now);
-      case 'monthly': return isAfter(d, startOfMonth(now));
-      case 'quarterly': return isAfter(d, startOfQuarter(now));
-      case 'semi-annually': return isAfter(d, subMonths(now, 6));
-      case 'yearly': return isAfter(d, startOfYear(now));
-      default: return true; // 'all'
-    }
-  });
-};
-
-// GET: JSON Data
-router.get('/', async (req, res) => {
+// GET /api/ledger
+router.get('/', async (req: Request, res: Response) => {
   try {
-    const data = await LedgerService.getGeneralLedger();
-    res.json(data);
+    const { from, to } = req.query;
+    
+    // FIX: Changed from getGeneralLedger() to getLedger()
+    const ledgerData = await LedgerService.getLedger(from as string, to as string);
+    
+    res.json(ledgerData);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch ledger" });
+    console.error("Ledger Fetch Error:", error);
+    res.status(500).json({ error: "Failed to fetch ledger data" });
   }
 });
 
-// GET: PDF Export
-router.get('/pdf', async (req, res) => {
+// GET /api/ledger/pdf
+router.get('/pdf', async (req: Request, res: Response) => {
   try {
-    const { filter } = req.query;
-    const filterType = (filter as string) || 'all';
-    
-    // 1. Get Data
-    const allData = await LedgerService.getGeneralLedger();
-    
-    // 2. Filter Data
-    const filteredData = filterData(allData, filterType);
+    const { from, to } = req.query;
 
-    // 3. Generate PDF
-    const labelMap: any = { daily: 'Today', monthly: 'This Month', quarterly: 'This Quarter', 'semi-annually': 'Last 6 Months', yearly: 'This Year', all: 'All Time' };
-    const pdfBuffer = await PdfService.generateLedgerPdf(filteredData, labelMap[filterType]);
+    // FIX: Changed from getGeneralLedger() to getLedger()
+    const transactions = await LedgerService.getLedger(from as string, to as string);
 
-    // 4. Send
+    const filterLabel = (from && to) 
+      ? `${from} to ${to}` 
+      : "All Time";
+
+    const pdfBuffer = await PdfService.generateLedgerPdf(transactions, filterLabel);
+
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=ledger-${filterType}.pdf`);
-    res.send(Buffer.from(pdfBuffer));
+    res.setHeader('Content-Disposition', 'inline; filename="ledger.pdf"');
+    res.send(pdfBuffer);
 
   } catch (error) {
     console.error("Ledger PDF Error:", error);
-    res.status(500).json({ error: "Failed to generate PDF" });
+    res.status(500).json({ error: "Failed to generate ledger PDF" });
   }
 });
 

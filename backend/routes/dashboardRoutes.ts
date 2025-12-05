@@ -1,88 +1,124 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { format } from 'date-fns';
 
 const router = Router();
 const prisma = new PrismaClient();
 
-// Helper: Handle BigInt serialization for JSON
-const serialize = (data: any) => {
-  return JSON.parse(JSON.stringify(data, (key, value) =>
-    typeof value === 'bigint' ? Number(value) : value
-  ));
-};
-
 router.get('/stats', async (req, res) => {
   try {
-    // 1. Revenue & Expense (Raw SQL for speed)
-    const revenueData: any[] = await prisma.$queryRaw`
-      SELECT DATE_FORMAT(issue_date, '%Y-%m') as month, SUM(grand_total) as amount, COUNT(id) as count 
-      FROM Invoice WHERE status != 'DRAFT' 
-      GROUP BY month ORDER BY month ASC LIMIT 12
-    `;
+    const { from, to } = req.query;
 
-    const expenseData: any[] = await prisma.$queryRaw`
-      SELECT DATE_FORMAT(date, '%Y-%m') as month, SUM(amount) as amount, COUNT(id) as count 
-      FROM Expense 
-      GROUP BY month ORDER BY month ASC LIMIT 12
-    `;
+    // 1. Date Filter
+    const dateFilter: any = {};
+    if (from && to) {
+        dateFilter.issue_date = {
+            gte: new Date(from as string),
+            lte: new Date(to as string)
+        };
+    }
 
-    // 2. Yearly Totals
-    const totalRevenue = await prisma.invoice.aggregate({ 
-        _sum: { grand_total: true },
-        where: { status: { not: 'DRAFT' } } 
-    });
+    // 2. AGGREGATES
     
-    const totalExpense = await prisma.expense.aggregate({ 
-        _sum: { amount: true } 
+    // A. Revenue (PAID only)
+    const revenueAgg = await prisma.invoice.aggregate({
+        _sum: { grand_total: true },
+        where: {
+            ...dateFilter,
+            status: { in: ['PAID', 'Paid'] }
+        }
     });
 
-    const totalInvoicesCount = await prisma.invoice.count();
+    // B. Pending (Sent/Overdue/Partial)
+    const pendingAgg = await prisma.invoice.aggregate({
+        _sum: { grand_total: true },
+        where: {
+            ...dateFilter,
+            status: { in: ['SENT', 'Sent', 'OVERDUE', 'Overdue', 'PARTIAL', 'Partial'] }
+        }
+    });
 
-    // 3. Top 5 Unpaid Invoices
+    // C. Expenses
+    const expenseAgg = await prisma.expense.aggregate({
+        _sum: { amount: true },
+        where: {
+            date: dateFilter.issue_date 
+        }
+    });
+
+    // FIX: Safely convert Decimal Aggregates
+    const totalRevenue = Number(revenueAgg._sum.grand_total?.toString() || 0);
+    const totalPending = Number(pendingAgg._sum.grand_total?.toString() || 0);
+    const totalExpense = Number(expenseAgg._sum.amount?.toString() || 0);
+    const netProfit = totalRevenue - totalExpense;
+
+    // 3. MONTHLY CHARTS
+    const allInvoices = await prisma.invoice.findMany({
+        where: {
+            ...dateFilter,
+            status: { not: 'DRAFT' }
+        },
+        select: { issue_date: true, grand_total: true, status: true }
+    });
+
+    const allExpenses = await prisma.expense.findMany({
+        where: { date: dateFilter.issue_date },
+        select: { date: true, amount: true }
+    });
+
+    const statsMap = new Map<string, { revenue: number; expense: number; pending: number }>();
+
+    allInvoices.forEach(inv => {
+        const month = format(new Date(inv.issue_date), 'MMM yyyy');
+        const existing = statsMap.get(month) || { revenue: 0, expense: 0, pending: 0 };
+        
+        // FIX: Handle Decimal Conversion inside loop
+        const amount = Number(inv.grand_total?.toString() || 0);
+        const status = inv.status.toUpperCase(); 
+
+        if (status === 'PAID') {
+            existing.revenue += amount;
+        } else {
+            existing.pending += amount;
+        }
+        statsMap.set(month, existing);
+    });
+
+    allExpenses.forEach(exp => {
+        const month = format(new Date(exp.date), 'MMM yyyy');
+        const existing = statsMap.get(month) || { revenue: 0, expense: 0, pending: 0 };
+        // FIX: Handle Decimal Conversion
+        existing.expense += Number(exp.amount?.toString() || 0);
+        statsMap.set(month, existing);
+    });
+
+    const monthlyStats = Array.from(statsMap.entries()).map(([month, val]) => ({
+        month,
+        revenue: val.revenue,
+        expense: val.expense,
+        pending: val.pending,
+        balance: val.revenue - val.expense
+    }));
+
+    // 4. TOP UNPAID (Tables)
     const topUnpaid = await prisma.invoice.findMany({
-        where: { status: { in: ['SENT', 'OVERDUE', 'PARTIAL'] } },
-        orderBy: { grand_total: 'desc' },
+        where: {
+            status: { in: ['SENT', 'OVERDUE', 'Sent', 'Overdue'] }
+        },
+        orderBy: { due_date: 'asc' },
         take: 5,
         include: { client: true }
     });
 
-    // 4. Merge Monthly Data
-    const allMonths = new Set([
-        ...(revenueData || []).map(r => r.month), 
-        ...(expenseData || []).map(e => e.month)
-    ].sort());
-
-    const monthlyStats = Array.from(allMonths).map(month => {
-        const rev = revenueData?.find(r => r.month === month);
-        const exp = expenseData?.find(e => e.month === month);
-        
-        const revAmount = Number(rev?.amount || 0);
-        const expAmount = Number(exp?.amount || 0);
-        const revCount = Number(rev?.count || 0);
-        
-        return {
-            month,
-            revenue: revAmount,
-            expense: expAmount,
-            balance: revAmount - expAmount,
-            avgSale: revCount > 0 ? revAmount / revCount : 0
-        };
+    res.json({
+        summary: { totalRevenue, totalExpense, netProfit, totalPending },
+        charts: { monthlyStats },
+        tables: { topUnpaid }
     });
 
-    res.json(serialize({
-      summary: {
-        totalRevenue: totalRevenue._sum.grand_total || 0,
-        totalExpense: totalExpense._sum.amount || 0,
-        netProfit: (Number(totalRevenue._sum.grand_total || 0) - Number(totalExpense._sum.amount || 0)),
-        totalInvoices: totalInvoicesCount
-      },
-      charts: { monthlyStats },
-      tables: { topUnpaid }
-    }));
-
-  } catch (error) {
-    console.error("Dashboard Stats Error:", error);
-    res.status(500).json({ error: "Failed to fetch dashboard stats" });
+  } catch (e) {
+    console.error("Dashboard Stats Error:", e);
+    res.status(500).json({ error: "Failed to fetch dashboard analytics" });
   }
 });
 
