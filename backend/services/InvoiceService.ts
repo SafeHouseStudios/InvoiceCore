@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { TaxService } from './TaxService'; // Import Tax Logic
 
 const prisma = new PrismaClient();
 
@@ -14,23 +15,70 @@ interface CreateInvoiceDTO {
   manualNumber?: string;
   remarks?: string;
   bankAccountId?: number;
+  currency?: string; // Add Currency Support
 }
 
 export class InvoiceService {
   
   // Helper: Get Fiscal Year string (e.g., "2425")
   private static getFiscalYear(date: Date): string {
-    const month = date.getMonth() + 1; // 0-indexed
+    const month = date.getMonth() + 1; 
     const year = date.getFullYear();
     const shortYear = year % 100;
 
     // Indian Fiscal Year starts April 1st
-    // UPDATED: Removed hyphen from format (e.g. 2425 instead of 24-25)
     if (month >= 4) {
       return `${shortYear}${shortYear + 1}`;
     } else {
       return `${shortYear - 1}${shortYear}`;
     }
+  }
+
+  // --- NEW: Get Shared Invoices (Sent/Paid/Overdue) ---
+  static async getSharedInvoices() {
+    return await prisma.invoice.findMany({
+      where: {
+        status: {
+          not: 'DRAFT' 
+        }
+      },
+      include: { 
+        client: true,
+        bank_account: true 
+      },
+      orderBy: { 
+        issue_date: 'desc' 
+      }
+    });
+  }
+
+  // --- NEW: Calculate Tax (Proxy to TaxService) ---
+  static async calculateTax(clientStateCode: number, clientCountry: string) {
+    return await TaxService.calculateTaxType(clientStateCode, clientCountry);
+  }
+
+  // --- NEW: Get All Invoices ---
+  static async getAllInvoices() {
+    return await prisma.invoice.findMany({
+      include: {
+        client: true,
+        bank_account: true
+      },
+      orderBy: {
+        created_at: 'desc'
+      }
+    });
+  }
+
+  // --- NEW: Get Invoice By ID ---
+  static async getInvoiceById(id: number) {
+    return await prisma.invoice.findUnique({
+      where: { id },
+      include: {
+        client: true,
+        bank_account: true
+      }
+    });
   }
 
   // 1. CREATE INVOICE
@@ -97,16 +145,10 @@ export class InvoiceService {
           grand_total: data.grandTotal,
           is_manual_entry: data.isManual,
           remarks: data.remarks,
-          bank_account_id: data.bankAccountId
+          bank_account_id: data.bankAccountId,
+          currency: data.currency || 'INR' // Ensure currency is saved
         }
       });
-    });
-  }
-
-  // 3. DELETE INVOICE
-  static async deleteInvoice(id: number) {
-    return await prisma.invoice.delete({
-      where: { id }
     });
   }
 
@@ -137,9 +179,17 @@ export class InvoiceService {
                 subtotal: data.subtotal,
                 grand_total: data.grandTotal,
                 remarks: data.remarks,
+                currency: data.currency
                 // Note: We do NOT allow updating invoice_number to preserve audit trail
             }
         });
+    });
+  }
+
+  // 3. DELETE INVOICE
+  static async deleteInvoice(id: number) {
+    return await prisma.invoice.delete({
+      where: { id }
     });
   }
 }

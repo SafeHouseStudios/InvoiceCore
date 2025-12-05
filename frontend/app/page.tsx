@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DollarSign, Activity, TrendingUp, Wallet, AlertCircle, Loader2, Calendar as CalendarIcon, X } from "lucide-react";
+import { DollarSign, Activity, TrendingUp, Wallet, AlertCircle, Loader2, Calendar as CalendarIcon, X, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -14,9 +14,11 @@ import {
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 
 export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
+  const [sharedInvoices, setSharedInvoices] = useState<any[]>([]); // New State for Shared Invoices
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   
@@ -26,7 +28,7 @@ export default function DashboardPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-        // Construct Query Params for Filtering
+        // Construct Query Params for Filtering Stats
         let query = "";
         if (dateRange?.from) {
             const fromStr = dateRange.from.toISOString();
@@ -34,8 +36,15 @@ export default function DashboardPage() {
             query = `?from=${fromStr}&to=${toStr}`;
         }
 
-        const res = await api.get(`/dashboard/stats${query}`);
-        setData(res.data);
+        // Parallel Requests: Dashboard Stats + Shared Invoices
+        const [statsRes, sharedRes] = await Promise.all([
+            api.get(`/dashboard/stats${query}`),
+            api.get('/invoices/shared')
+        ]);
+
+        setData(statsRes.data);
+        setSharedInvoices(sharedRes.data);
+
     } catch (err) {
         console.error(err);
         setError("Failed to load dashboard data.");
@@ -67,10 +76,9 @@ export default function DashboardPage() {
     );
   }
 
-  const { summary, charts, tables } = data || { summary: {}, charts: {}, tables: {} };
+  const { summary, charts } = data || { summary: {}, charts: {} };
   
   const monthlyStats = charts?.monthlyStats || [];
-  const topUnpaid = tables?.topUnpaid || [];
   const lastAvgSale = monthlyStats.length > 0 ? monthlyStats[monthlyStats.length - 1].avgSale : 0;
 
   const formatCurrency = (val: number) => 
@@ -171,6 +179,8 @@ export default function DashboardPage() {
 
       {/* 3. TABLES ROW */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Recent Balances Table */}
         <Card className="shadow-horizon border-none bg-card">
             <CardHeader><CardTitle>Recent Balances</CardTitle></CardHeader>
             <CardContent>
@@ -199,11 +209,13 @@ export default function DashboardPage() {
             </CardContent>
         </Card>
 
+        {/* SHARED INVOICES (Replaces Pending Payments) */}
         <Card className="shadow-horizon border-none bg-card">
             <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-destructive">
-                    <AlertCircle className="h-5 w-5" /> Pending Payments
+                <CardTitle className="flex items-center gap-2 text-foreground">
+                    Pending Invoices
                 </CardTitle>
+                <CardDescription>All invoices issued to clients (Sent/Paid/Overdue).</CardDescription>
             </CardHeader>
             <CardContent>
                 <Table>
@@ -211,18 +223,27 @@ export default function DashboardPage() {
                         <TableRow className="hover:bg-transparent">
                             <TableHead>Invoice</TableHead>
                             <TableHead>Client</TableHead>
-                            <TableHead>Due Date</TableHead>
+                            <TableHead>Status</TableHead>
                             <TableHead className="text-right">Amount</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {topUnpaid.length === 0 ? (
-                            <TableRow><TableCell colSpan={4} className="text-center py-4 text-muted-foreground">No pending invoices!</TableCell></TableRow>
-                        ) : topUnpaid.map((inv: any) => (
+                        {sharedInvoices.length === 0 ? (
+                            <TableRow><TableCell colSpan={4} className="text-center py-4 text-muted-foreground">No shared invoices.</TableCell></TableRow>
+                        ) : sharedInvoices.map((inv: any) => (
                             <TableRow key={inv.id}>
-                                <TableCell className="font-mono text-xs text-foreground">{inv.invoice_number}</TableCell>
-                                <TableCell className="text-muted-foreground">{inv.client?.company_name || "Unknown"}</TableCell>
-                                <TableCell className="text-xs text-muted-foreground">{inv.due_date ? format(new Date(inv.due_date), "dd MMM") : "-"}</TableCell>
+                                <TableCell className="font-mono text-xs text-foreground font-medium">{inv.invoice_number}</TableCell>
+                                <TableCell className="text-muted-foreground text-sm">{inv.client?.company_name || "Unknown"}</TableCell>
+                                <TableCell>
+                                    <Badge variant="outline" className={`
+                                        ${inv.status === 'PAID' ? 'bg-green-50 text-green-700 border-green-200' : ''}
+                                        ${inv.status === 'SENT' ? 'bg-blue-50 text-blue-700 border-blue-200' : ''}
+                                        ${inv.status === 'OVERDUE' ? 'bg-red-50 text-red-700 border-red-200' : ''}
+                                        ${inv.status === 'PARTIAL' ? 'bg-orange-50 text-orange-700 border-orange-200' : ''}
+                                    `}>
+                                        {inv.status}
+                                    </Badge>
+                                </TableCell>
                                 <TableCell className="text-right font-bold text-foreground">
                                     {formatCurrency(Number(inv.grand_total))}
                                 </TableCell>

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { format } from 'date-fns';
+import e from 'express';
 
 // --- Helper: Convert Number to Words (Indian Numbering System) ---
 const numberToWords = (n: number): string => {
@@ -46,6 +47,7 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any): string => 
     const profile = ownerProfile?.json_value || {};
     const currency = invoice.currency || 'INR';
     const amountInWords = getAmountInWords(Number(invoice.grand_total), currency);
+        
 
     // 2. Formatters
     const formatCurrency = (amount: any) => {
@@ -94,11 +96,18 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any): string => 
           <tr><td>IGST </td><td> — </td></tr>
           
         `;
-    } else {
+    } else if (tax.taxType === 'IGST' || (igst > 0)) {
         taxRows += `
             <tr><td>SGST</td><td> — </td></tr>
             <tr><td>CGST </td><td> — </td></tr>
             <tr><td>IGST (${rate}%)</td><td>${formatCurrency(igst)}</td></tr>
+        `;
+    }
+    else {
+        taxRows += `
+            <tr><td>SGST</td><td> — </td></tr>
+            <tr><td>CGST </td><td> — </td></tr>
+            <tr><td>IGST</td><td> — </td></tr>
         `;
     }
 
@@ -401,6 +410,7 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any): string => 
             ${profile.cin ? `CIN: ${profile.cin}` : ''}
             </div>
             <div class="company-address-line" style="white-space: pre-line;">${profile.address || ''}</div>
+            <div class="company-address-line" style="white-space: pre-line;">${profile.state || ''}, India</div>
         </div>
         <div>
             ${logoSrc ? `<img id="company-logo" src="${logoSrc}" />` : ''}
@@ -459,8 +469,11 @@ export const generateInvoiceHTML = (invoice: any, ownerProfile: any): string => 
             <div class="bank-info">
                 <div class="bank-title">Bank Details</div>
                 <div>Bank: ${invoice.bank_account?.bank_name || profile.bank_details || 'N/A'}</div>
+                <div>A/C Holder: ${invoice.bank_account?.account_holder || ''}</div>
                 <div>A/C No: ${invoice.bank_account?.account_number || ''}</div>
                 <div>IFSC: ${invoice.bank_account?.ifsc_code || ''}</div>
+                ${invoice.bank_account?.swift_code ? `<div>SWIFT: ${invoice.bank_account.swift_code}</div>` : ''}
+                ${invoice.bank_account?.payment_method ? `<div>Method: ${invoice.bank_account.payment_method}</div>` : ''}
             </div>
         </div>
 
