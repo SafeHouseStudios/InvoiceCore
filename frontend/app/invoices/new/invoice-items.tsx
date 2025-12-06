@@ -53,7 +53,7 @@ export function InvoiceItemsTable({ items, setItems, currency = "INR" }: Invoice
     <div className="space-y-4">
       <div className="border rounded-md">
         <Table>
-          <TableHeader className="bg-slate-50">
+          <TableHeader className="bg-background">
             <TableRow>
               <TableHead className="w-[35%]">Description</TableHead>
               <TableHead className="w-[15%]">HSN / SAC</TableHead>
@@ -76,7 +76,7 @@ export function InvoiceItemsTable({ items, setItems, currency = "INR" }: Invoice
                 <TableCell>
                   {/* HSN Dropdown */}
                   <select
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                     value={item.hsn}
                     onChange={(e) => updateItem(item.id, "hsn", e.target.value)}
                   >

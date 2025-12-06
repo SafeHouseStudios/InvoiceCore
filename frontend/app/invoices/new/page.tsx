@@ -157,11 +157,11 @@ export default function NewInvoicePage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 space-y-6">
+    <div className="min-h-screen bg-background p-6 space-y-6">
       
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-slate-900">New Invoice</h1>
-        <Button onClick={handleSave} disabled={isSaving} className="bg-slate-900 hover:bg-slate-800">
+        <h1 className="text-2xl font-bold text-primary">New Invoice</h1>
+        <Button onClick={handleSave} disabled={isSaving} className="bg-primary hover:bg-slate-800">
           {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
           Save Invoice
         </Button>
@@ -173,7 +173,7 @@ export default function NewInvoicePage() {
         <Card className="md:col-span-1 shadow-sm">
           <CardContent className="p-6 space-y-4">
             
-            <div className="flex items-center justify-between bg-slate-100 p-3 rounded-md">
+            <div className="flex items-center justify-between bg-background p-3 rounded-md">
                 <div className="flex items-center space-x-2" title="Enable to backdate or use custom invoice numbers">
                     <Label htmlFor="manual-mode" className="cursor-pointer">Manual Override</Label>
                     <AlertCircle className="w-3 h-3 text-slate-400" />

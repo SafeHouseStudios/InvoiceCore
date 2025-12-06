@@ -162,7 +162,7 @@ export default function EditInvoicePage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-screen bg-background p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
             <Link href="/invoices">
@@ -173,7 +173,7 @@ export default function EditInvoicePage() {
                 <p className="text-muted-foreground text-sm font-mono">{invoiceNumber}</p>
             </div>
         </div>
-        <Button onClick={handleUpdate} disabled={isSaving} className="bg-primary text-white hover:bg-primary/90">
+        <Button onClick={handleUpdate} disabled={isSaving} className="bg-primary text-primary-foreground hover:bg-primary/90">
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Save className="w-4 h-4 mr-2"/>} 
             Update Invoice
         </Button>

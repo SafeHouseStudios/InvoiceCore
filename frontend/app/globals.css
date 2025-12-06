@@ -162,8 +162,9 @@ html.dark[data-style='midnight'] {
   
   /* Duplicate wrapper style just to be safe */
   [data-radix-popper-content-wrapper] {
-    background-color: hsl(var(--popover) / 0.95);
-    @apply backdrop-blur-md border border-border shadow-2xl;
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
   }
 
   .rdp {
