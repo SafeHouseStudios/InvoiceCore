@@ -11,6 +11,10 @@ interface ConfiguratorState {
   contrastMode: 'filled' | 'transparent';
   setContrastMode: (m: 'filled' | 'transparent') => void;
 
+  // --- NEW: Dark Style Preference ---
+  darkStyle: 'navy' | 'midnight';
+  setDarkStyle: (s: 'navy' | 'midnight') => void;
+
   primaryColor: string;
   setPrimaryColor: (c: string) => void;
   
@@ -29,17 +33,22 @@ export const useConfigurator = create<ConfiguratorState>()(
       contrastMode: 'filled',
       setContrastMode: (m) => set({ contrastMode: m }),
 
-      primaryColor: '#4318FF', // Default Horizon Purple
+      // Default to Navy (Horizon style)
+      darkStyle: 'navy',
+      setDarkStyle: (s) => set({ darkStyle: s }),
+
+      primaryColor: '#4318FF', 
       setPrimaryColor: (c) => set({ primaryColor: c }),
 
       resetConfig: () => set({
         sidebarType: 'default',
         contrastMode: 'filled',
+        darkStyle: 'navy',
         primaryColor: '#4318FF'
       })
     }),
     {
-      name: 'invoicecore-config', // LocalStorage key
+      name: 'invoicecore-config',
     }
   )
 );

@@ -4,72 +4,77 @@
 
 @layer base {
   :root {
-    /* --- HORIZON LIGHT THEME (High Contrast) --- */
-    --background: 210 33% 96%;  /* #F4F7FE - Light Cool Grey */
-    --foreground: 222 47% 11%;  /* #1B2559 - Deep Navy Text */
-
-    --card: 0 0% 100%;          /* Pure White */
+    /* --- HORIZON LIGHT THEME (Keep existing) --- */
+    --background: 210 33% 96%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
-
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-
-    /* Brand Color: Horizon Purple (Default) */
-    --primary: 251 100% 55%;    /* #4318FF */
+    --primary: 251 100% 55%;
     --primary-foreground: 0 0% 100%;
-
     --secondary: 220 14% 96%;
     --secondary-foreground: 222 47% 11%;
-
     --muted: 220 14% 96%;
-    --muted-foreground: 220 8% 46%; /* #A3AED0 - Readable Grey */
-
+    --muted-foreground: 220 8% 46%;
     --accent: 210 40% 96.1%;
     --accent-foreground: 222 47% 11%;
-
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 100%;
-
-    --border: 220 13% 91%;      /* #E9EDF7 */
+    --border: 220 13% 91%;
     --input: 220 13% 91%;
     --ring: 251 100% 55%;
-
-    --radius: 1rem; /* Modern rounded corners */
+    --radius: 1rem;
   }
 
-  /* --- HORIZON DARK THEME (Deep Navy Fix) --- */
+  /* --- HORIZON DARK (Default Navy) --- */
   .dark {
-    /* Background: Deepest Navy (Almost Black) */
     --background: 225 50% 8%;   /* #060B1E */
-    --foreground: 0 0% 100%;    /* Pure White Text */
-
-    /* Card: Rich Navy Blue */
+    --foreground: 0 0% 100%;
     --card: 227 60% 17%;        /* #111C44 */
     --card-foreground: 0 0% 100%;
-
-    --popover: 227 60% 17%;     /* Matches Card */
+    --popover: 227 60% 17%;
     --popover-foreground: 0 0% 100%;
-
-    /* Primary: Slightly brighter for visibility */
-    --primary: 251 100% 65%;    /* #7551FF */
+    --primary: 251 100% 65%;
     --primary-foreground: 0 0% 100%;
-
-    --secondary: 226 58% 25%;   /* Button backgrounds */
+    --secondary: 226 58% 25%;
     --secondary-foreground: 0 0% 100%;
-
     --muted: 226 58% 25%;
-    /* CRITICAL: Brighter Grey for Secondary Text so it doesn't disappear */
-    --muted-foreground: 223 25% 80%; /* #A3AED0 */
-
+    --muted-foreground: 223 25% 80%;
     --accent: 226 58% 25%;
     --accent-foreground: 0 0% 100%;
-
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 100%;
-
-    /* Borders: Visible but subtle Navy */
-    --border: 226 45% 30%;      /* #2B3674 */
+    --border: 226 45% 30%;
     --input: 226 45% 30%;
+    --ring: 251 100% 65%;
+  }
+
+  /* --- NEW: MIDNIGHT THEME (Pure Black / OLED) --- */
+  .dark[data-style='midnight'] {
+    --background: 0 0% 0%;       /* Pure Black */
+    --foreground: 0 0% 98%;
+    
+    --card: 0 0% 9%;             /* #171717 Deep Gray */
+    --card-foreground: 0 0% 98%;
+    
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 98%;
+    
+    --primary: 0 0% 100%;        
+    --primary-foreground: 0 0% 0%;
+    
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 98%;
+    
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 65%;
+    
+    --accent: 0 0% 15%;
+    --accent-foreground: 0 0% 98%;
+    
+    --border: 0 0% 20%;          /* Subtle gray borders */
+    --input: 0 0% 20%;
     --ring: 251 100% 65%;
   }
 }
@@ -86,9 +91,6 @@
     overflow-x: hidden;
   }
 
-  /* CSS-Based Animated Background (Fallback/Enhancement)
-     If you use the <DynamicBackground /> component, these add extra depth.
-  */
   body::before,
   body::after {
     content: '';
@@ -123,6 +125,34 @@
   .dark body::after {
     opacity: 0.15;
   }
+
+  .dark[data-style='midnight'] body::before,
+  .dark[data-style='midnight'] body::after {
+      display: none !important;
+  }
+
+  /* --- GLASSMORPHISM OVERRIDES --- */
+  .dark[data-style='midnight'] .bg-card,
+  .dark[data-style='midnight'] [data-slot="card"] {
+      background-color: rgba(0, 0, 0, 0.4) !important; /* Lighter alpha for contrast against black bg */
+      backdrop-filter: blur(20px) saturate(0%) !important; /* Grayscale glass */
+      border: 1px solid rgba(255, 255, 255, 0.15) !important;
+      box-shadow: 0 4px 20px rgba(255, 255, 255, 0.05) !important; /* Subtle white glow instead of black shadow */
+  }
+
+  /* Sidebar Glass */
+  .dark[data-style='midnight'] aside {
+      background-color: rgba(0, 0, 0, 0.6) !important;
+      backdrop-filter: blur(20px);
+      border-right: 1px solid rgba(255, 255, 255, 0.15) !important;
+  }
+  
+  /* Header Glass */
+  .dark[data-style='midnight'] header {
+      background-color: rgba(0, 0, 0, 0.6) !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+  }
+
 }
 
 @layer components {

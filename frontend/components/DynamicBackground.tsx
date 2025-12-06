@@ -29,8 +29,7 @@ export function DynamicBackground() {
 
   return (
     <div className="fixed inset-0 w-full h-full overflow-hidden pointer-events-none z-[-1]">
-      {/* Dark Mode Overlay for readability */}
-      <div className="absolute inset-0 bg-background/80 dark:bg-[#0B1437]/90 backdrop-blur-[80px] z-[1]" />
+      <div className="absolute inset-0 bg-background/80 dark:bg-background/90 backdrop-blur-[80px] z-[1]" />
 
       {/* Floating Orbs */}
       {orbs.map((orb) => (
