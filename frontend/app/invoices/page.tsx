@@ -303,6 +303,7 @@ export default function InvoiceListPage() {
                                 <DropdownMenuItem onClick={() => handleSendEmail(inv)}>Send Email</DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'PAID')}>Mark Paid</DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'SHARED')}>Mark Shared</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'DRAFT')}>Mark Draft</DropdownMenuItem>
                                 <DropdownMenuItem className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-900/10" onClick={() => handleDelete(inv.id)}> Delete </DropdownMenuItem>
                               </DropdownMenuContent>
                            </DropdownMenu>
