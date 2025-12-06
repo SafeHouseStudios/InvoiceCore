@@ -128,7 +128,7 @@ export default function ExpensesPage() {
         
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-                <Button className="bg-primary text-white hover:bg-primary/90 shadow-lg shadow-primary/20">
+                <Button className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20">
                     <Plus className="w-4 h-4 mr-2" /> Record Expense
                 </Button>
             </DialogTrigger>

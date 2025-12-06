@@ -152,7 +152,7 @@ export function GeneralSettings({ profile, handleChange, handleSave, loading, di
             {/* Save Button */}
             <div className="flex justify-end pt-4 border-t border-border">
               {!disabled ? (
-                  <Button onClick={handleSave} disabled={loading} className="bg-primary text-white min-w-[140px]">
+                  <Button onClick={handleSave} disabled={loading} className="bg-primary text-primary-foreground min-w-[140px]">
                     {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Save Changes"}
                   </Button>
               ) : (

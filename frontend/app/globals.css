@@ -51,12 +51,12 @@
   }
 
   /* --- MIDNIGHT BLACK THEME OVERRIDES --- */
-  html.dark[data-style='midnight'] {
+html.dark[data-style='midnight'] {
     --background: 0 0% 0%;       /* Pure Black */
     --foreground: 0 0% 100%;     /* Pure White */
     
     /* Card Base */
-    --card: 0 0% 0%;             
+    --card: 0 0% 3%;             /* Slightly lighter than pure black for separation */
     --card-foreground: 0 0% 100%;
     
     --popover: 0 0% 5%;
@@ -69,8 +69,9 @@
     --secondary: 0 0% 12%;
     --secondary-foreground: 0 0% 100%;
     
+    /* Lighter muted for better readability on black */
     --muted: 0 0% 12%;
-    --muted-foreground: 0 0% 60%;
+    --muted-foreground: 0 0% 70%; 
     
     --accent: 0 0% 12%;
     --accent-foreground: 0 0% 100%;
@@ -80,8 +81,8 @@
     
     --border: 0 0% 20%;          
     --input: 0 0% 20%;
-    --ring: 0 0% 100%;
-  }
+    --ring: 0 0% 80%; /* Softer ring */
+}
 }
 
 @layer base {
@@ -234,5 +235,4 @@
     @apply bg-slate-400 dark:bg-slate-600;
   }
   
-  /* Removed the hardcoded 'text-slate' overrides that were breaking colors */
 }

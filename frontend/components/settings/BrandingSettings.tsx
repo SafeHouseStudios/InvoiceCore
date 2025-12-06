@@ -55,7 +55,7 @@ export function BrandingSettings({ profile, handleFileUpload, handleSave, loadin
         {/* Footer Action Area (For Logo/Signature Saves) */}
         <div className="flex justify-end pt-4 border-t border-border">
            {!disabled ? (
-               <Button onClick={handleSave} disabled={loading} className="bg-primary text-white min-w-[140px]">
+               <Button onClick={handleSave} disabled={loading} className="bg-primary text-primary-foreground min-w-[140px]">
                  {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <><Save className="w-4 h-4 mr-2" /> Save Asset Changes</>}
                </Button>
            ) : (

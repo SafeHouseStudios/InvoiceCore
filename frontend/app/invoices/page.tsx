@@ -183,7 +183,7 @@ export default function InvoiceListPage() {
           <p className="text-muted-foreground">Manage your billing history</p>
         </div>
         <Link href="/invoices/new">
-          <Button className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/25">
+          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25">
             <Plus className="w-4 h-4 mr-2" /> Create New
           </Button>
         </Link>

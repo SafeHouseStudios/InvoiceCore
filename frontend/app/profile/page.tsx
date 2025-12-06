@@ -145,7 +145,7 @@ export default function ProfilePage() {
              </div>
           </CardContent>
           <CardFooter className="justify-end">
-             <Button onClick={handleUpdateProfile} disabled={isSaving} className="bg-primary text-white">
+             <Button onClick={handleUpdateProfile} disabled={isSaving} className="bg-primary text-primary-foreground">
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <CheckCircle className="w-4 h-4 mr-2"/>}
                 Save Changes
              </Button>

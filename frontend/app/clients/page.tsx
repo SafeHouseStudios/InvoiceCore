@@ -115,7 +115,7 @@ export default function ClientListPage() {
           <p className="text-muted-foreground">Manage your customer database</p>
         </div>
         <Link href="/clients/new">
-          <Button className="bg-primary text-white hover:bg-primary/90 shadow-lg shadow-primary/25">
+          <Button className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/25">
             <Plus className="w-4 h-4 mr-2" /> Add Client
           </Button>
         </Link>

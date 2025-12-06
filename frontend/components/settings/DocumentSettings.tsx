@@ -139,7 +139,7 @@ export function DocumentSettings({ disabled }: DocumentSettingsProps) {
 
        {!disabled && (
            <div className="lg:col-span-2 flex justify-end">
-              <Button onClick={saveSettings} disabled={loading} className="bg-primary text-white min-w-[150px]">
+              <Button onClick={saveSettings} disabled={loading} className="bg-primary text-primary-foreground min-w-[150px]">
                   {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                   Save Configurations
               </Button>

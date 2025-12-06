@@ -133,12 +133,13 @@ export function Sidebar({ className, hideLogo = false, forceExpand = false }: Si
                         "flex items-center relative group transition-all duration-200 rounded-xl",
                         isMini ? "justify-center py-3" : "px-4 py-3",
                         active 
-                            ? "bg-primary text-white shadow-md shadow-primary/25 font-semibold" 
+                            /* FIX: Changed text-white to text-primary-foreground */
+                            ? "bg-primary text-primary-foreground shadow-md shadow-primary/25 font-semibold" 
                             : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                     )}
                     title={isMini ? item.label : undefined}
                 >
-                    <item.icon className={cn(
+                                    <item.icon className={cn(
                         "shrink-0 transition-transform duration-200", 
                         isMini ? "h-6 w-6" : "h-5 w-5 mr-3",
                         active && !isMini && "scale-105"

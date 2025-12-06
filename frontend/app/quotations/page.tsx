@@ -142,7 +142,7 @@ export default function QuotationListPage() {
         
         {/* REDIRECTS TO NEW PAGE */}
         <Link href="/quotations/new">
-            <Button className="bg-primary text-white shadow-lg shadow-primary/25 hover:bg-primary/90">
+            <Button className="bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90">
                 <Plus className="w-4 h-4 mr-2" /> Create Quote
             </Button>
         </Link>

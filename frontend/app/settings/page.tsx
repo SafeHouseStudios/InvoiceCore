@@ -145,7 +145,7 @@ function TabItem({ value, icon, label }: any) {
     return (
         <TabsTrigger 
             value={value} 
-            className="data-[state=active]:bg-primary data-[state=active]:text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2 rounded-lg flex items-center gap-2 transition-all"
         >
             {icon} <span>{label}</span>
         </TabsTrigger>

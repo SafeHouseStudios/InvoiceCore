@@ -116,7 +116,7 @@ export function TeamSettings({ disabled }: TeamSettingsProps) {
                             </SelectContent>
                         </Select>
                     </div>
-                    <Button onClick={createUser} disabled={loading} className="bg-primary text-white">
+                    <Button onClick={createUser} disabled={loading} className="bg-primary text-primary-foreground">
                         {loading ? <Loader2 className="w-4 h-4 animate-spin"/> : <><UserPlus className="w-4 h-4 mr-2"/> Add</>}
                     </Button>
                 </div>

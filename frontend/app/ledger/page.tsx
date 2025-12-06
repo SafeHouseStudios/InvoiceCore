@@ -106,7 +106,7 @@ export default function LedgerPage() {
             </div>
 
             {/* Export PDF Button */}
-            <Button onClick={handleExportPdf} disabled={exporting} className="bg-primary text-white">
+            <Button onClick={handleExportPdf} disabled={exporting} className="bg-primary text-primary-foreground">
                 {exporting ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Download className="w-4 h-4 mr-2" />}
                 Export PDF
             </Button>

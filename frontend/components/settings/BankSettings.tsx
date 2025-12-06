@@ -76,7 +76,7 @@ export function BankSettings({ disabled }: BankSettingsProps) {
         <CardHeader className="flex flex-row items-center justify-between">
             <div><CardTitle>Bank Accounts</CardTitle><CardDescription>Manage accounts for invoices.</CardDescription></div>
             {!disabled && (
-                <Button onClick={() => openDialog()} className="bg-primary text-white"><Plus className="w-4 h-4 mr-2"/> Add Bank</Button>
+                <Button onClick={() => openDialog()} className="bg-primary text-primary-foreground"><Plus className="w-4 h-4 mr-2"/> Add Bank</Button>
             )}
         </CardHeader>
         <CardContent>
